@@ -36,6 +36,7 @@ from nupic.frameworks.opf.model_factory import ModelFactory
 import model_params
 
 from astropy.io import fits
+import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ print(im.info)
 data = im[1].data
 print(data)
 
-headers = ['time', 'flux']
+headers = ['timestamp', 'na1', 'na2', 'na3', 'value']
 #####################
 
 _OUTPUT_PATH = "astro_anomaly_scores.csv"  # changed name of output file as to not overlap with taxi output sample
@@ -99,8 +100,8 @@ def runNYCTaxiAnomaly():
     for i, record in enumerate(reader, start=1): # FIXME reader
       modelInput = dict(zip(headers, record))
       modelInput["value"] = float(modelInput["value"])
-      modelInput["timestamp"] = datetime.datetime.strptime(
-          modelInput["timestamp"], "%Y-%m-%d %H:%M:%S")
+      modelInput["timestamp"] = datetime.datetime.fromtimestamp(float(modelInput["timestamp"])) #datetime.datetime.strptime(
+          #modelInput["timestamp"], "%Y-%m-%d %H:%M:%S")
       result = model.run(modelInput)
       anomalyScore = result.inferences['anomalyScore']
       csvWriter.writerow([modelInput["timestamp"], modelInput["value"],
