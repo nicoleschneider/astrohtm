@@ -20,7 +20,7 @@
 # ----------------------------------------------------------------------
 
 """
-A simple client to create a HTM anomaly detection model for nyctaxi dataset.
+A simple client to create a HTM anomaly detection model for astro_test dataset.
 The script prints out all records that have an abnormally high anomaly
 score.
 """
@@ -30,19 +30,16 @@ import datetime
 import logging
 
 from pkg_resources import resource_filename
-
 from nupic.frameworks.opf.model_factory import ModelFactory
 
 import model_params
 
 from astropy.io import fits
-import datetime
+import tqdm
 
 _LOGGER = logging.getLogger(__name__)
 
-_INPUT_DATA_FILE = resource_filename(  # FIXME input data file needs to change to astro_data
-  "nupic.datafiles", "extra/nycTaxi/nycTaxi.csv"
-)
+#_INPUT_DATA_FILE = resource_filename("nupic.datafiles", "extra/nycTaxi/nycTaxi.csv")
 
 #####################
 im = fits.open('./test_data.flc')
@@ -51,18 +48,18 @@ print(im.info)
 data = im[1].data
 print(data)
 
-headers = ['timestamp', 'na1', 'na2', 'na3', 'value']
+headers = ['timestamp', 'value']
 #####################
 
-_OUTPUT_PATH = "astro_anomaly_scores.csv"  # changed name of output file as to not overlap with taxi output sample
+_OUTPUT_PATH = "astro_anomaly_scores7.csv"  # changed name of output file
 
-_ANOMALY_THRESHOLD = 0.9
+_ANOMALY_THRESHOLD = 0.2
 
-# minimum metric value of nycTaxi.csv
-_INPUT_MIN = 8  #FIXME taxi specific value needs to be changed
+# minimum metric value of test_data.flc
+_INPUT_MIN = 0  # changed to min flux value
 
-# maximum metric value of nycTaxi.csv
-_INPUT_MAX = 39197 #FIXME taxi specific value needs to be changed
+# maximum metric value of test_data.flc
+_INPUT_MAX = 1 # changed to max flux value
 
 
 def _setRandomEncoderResolution(minResolution=0.001):
@@ -89,29 +86,32 @@ def createModel():
   return ModelFactory.create(model_params.MODEL_PARAMS)
 
 
-def runNYCTaxiAnomaly():
+def runAstroAnomaly():
   model = createModel()
   model.enableInference({'predictedField': 'value'})
-  with open (_INPUT_DATA_FILE) as fin:
-    reader = data #csv.reader(fin)   #FIXME csv input used here
-    csvWriter = csv.writer(open(_OUTPUT_PATH,"wb"))
-    csvWriter.writerow(["timestamp", "value", "anomaly_score"])
-    #headers = reader.next()  # FIXME specific to taxi file
-    for i, record in enumerate(reader, start=1): # FIXME reader
-      modelInput = dict(zip(headers, record))
-      modelInput["value"] = float(modelInput["value"])
-      modelInput["timestamp"] = datetime.datetime.fromtimestamp(float(modelInput["timestamp"])) #datetime.datetime.strptime(
-          #modelInput["timestamp"], "%Y-%m-%d %H:%M:%S")
-      result = model.run(modelInput)
-      anomalyScore = result.inferences['anomalyScore']
-      csvWriter.writerow([modelInput["timestamp"], modelInput["value"],
-                          "%.3f" % anomalyScore])
-      if anomalyScore > _ANOMALY_THRESHOLD:
-        _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.",
-                      result.rawInput["timestamp"], anomalyScore)
+  total = len(data)
+  #with open (_INPUT_DATA_FILE) as fin:
+    #reader = data
+  csvWriter = csv.writer(open(_OUTPUT_PATH,"wb"))
+  csvWriter.writerow(["timestamp", "value", "anomaly_score"])
 
-  print("Anomaly scores have been written to",_OUTPUT_PATH)
+  col0 = data.field(0)
+  col1 = data.field(1)
+  for i in tqdm.tqdm(range(0, total, 1), desc='% Complete'):
+    record = [col0[i], col1[i]]
+    modelInput = dict(zip(headers, record))
+    modelInput["value"] = float(modelInput["value"])
+    modelInput["timestamp"] = datetime.datetime.fromtimestamp(float(modelInput["timestamp"])) 
+    result = model.run(modelInput)
+    anomalyScore = result.inferences['anomalyScore']
+      
+    if anomalyScore > _ANOMALY_THRESHOLD:
+      _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", 			result.rawInput["timestamp"], anomalyScore)
+      csvWriter.writerow([modelInput["timestamp"], modelInput["value"], 
+	    "%.3f" % anomalyScore])
+
+  print("Anomalies have been written to",_OUTPUT_PATH)
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
-  runNYCTaxiAnomaly()
+  runAstroAnomaly()
