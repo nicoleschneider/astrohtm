@@ -53,9 +53,9 @@ print(data)
 headers = ['timestamp', 'value']
 #####################
 
-_OUTPUT_PATH = "astro_anomaly_scores7.csv"  # changed name of output file
+_OUTPUT_PATH = "astro_anomaly_scores12.csv"  # changed name of output file
 
-_ANOMALY_THRESHOLD = 0.2
+_ANOMALY_THRESHOLD = 0.5
 
 # minimum metric value of test_data.flc
 _INPUT_MIN = 0  # changed to min flux value
@@ -104,8 +104,8 @@ def runAstroAnomaly():
   csvWriter.writerow(["timestamp", "value", "anomaly_score"])
 
   col0 = data.field(0)
-  col1 = data.field(1)
-  for i in tqdm.tqdm(range(0, 1000, 1), desc='% Complete'):
+  col1 = data.field(2)
+  for i in tqdm.tqdm(range(0, 15000, 1), desc='% Complete'):
     record = [col0[i], col1[i]]
     modelInput = dict(zip(headers, record))
     modelInput["value"] = float(modelInput["value"])
