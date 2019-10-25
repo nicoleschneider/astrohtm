@@ -53,9 +53,9 @@ print(data)
 headers = ['timestamp', 'value']
 #####################
 
-_OUTPUT_PATH = "astro_anomaly_scores12.csv"  # changed name of output file
+_OUTPUT_PATH = "astro_anomaly_scores15.csv"  # changed name of output file
 
-_ANOMALY_THRESHOLD = 0.5
+_ANOMALY_THRESHOLD = -0.5
 
 # minimum metric value of test_data.flc
 _INPUT_MIN = 0  # changed to min flux value
@@ -105,11 +105,12 @@ def runAstroAnomaly():
 
   col0 = data.field(0)
   col1 = data.field(2)
-  for i in tqdm.tqdm(range(0, 15000, 1), desc='% Complete'):
+  for i in tqdm.tqdm(range(0, 35000, 1), desc='% Complete'):
     record = [col0[i], col1[i]]
     modelInput = dict(zip(headers, record))
     modelInput["value"] = float(modelInput["value"])
-    modelInput["timestamp"] = datetime.datetime.fromtimestamp(float(modelInput["timestamp"])) 
+    floattime = float(modelInput["timestamp"])
+    modelInput["timestamp"] = datetime.datetime.fromtimestamp(floattime) 
 
     result = model.run(modelInput)
     result = shifter.shift(result)
@@ -119,7 +120,7 @@ def runAstroAnomaly():
       
     if anomalyScore > _ANOMALY_THRESHOLD:
       _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", 			result.rawInput["timestamp"], anomalyScore)
-      csvWriter.writerow([modelInput["timestamp"], modelInput["value"], 
+      csvWriter.writerow([floattime, modelInput["value"], 
 	    "%.3f" % anomalyScore])
 
   print("Anomalies have been written to",_OUTPUT_PATH)
