@@ -46,26 +46,17 @@ from astropy.io import ascii
 
 _LOGGER = logging.getLogger(__name__)
 
-##############################################
-im = fits.open('./srcA_3to40_cl_barycorr_binned_multiD.fits')
-print("im.info: ", im.info)
-
-
-data = astropy.table.Table.read(im[1])
-data = im[1].data
-print("LENGTH: ", len(data))
-
-#print('df0: ', data.field(0))
-#print('df1: ', data.field(2)[:,0])
-#print('df2: ', data.field(2)[:,1])
-
+FITS = fits.open('./srcB_3to40_cl_barycorr_binned_multiD.fits')
+data = astropy.table.Table.read(FITS[1])
+data = FITS[1].data
+DATA_SIZE = len(data)
+print("LENGTH: ", DATA_SIZE)
 
 headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
         'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
         'b28', 'b29']
-##############################################
 
-_OUTPUT_PATH = "spectrum2.csv"  # changed name of output file
+_OUTPUT_PATH = "spectrum3.csv"  # changed name of output file
 
 _ANOMALY_THRESHOLD = 0.5
 
@@ -74,7 +65,10 @@ _INPUT_MIN = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 
 # maximum metric value of test_data.flc
 _INPUT_MAX = [439, 140, 41, 17, 12, 9, 9, 8, 11, 9, 10, 7, 6, 6, 7, 5, 7, 5, 7, 6, 6, 5, 5, 6, 5, 6, 4, 5, 5, 5] # changed to max flux value
+_INPUT_MAX = [500]*30
 
+MIN_VARIANCE = 2000
+ANOMALY_SCALE_FACTOR = 450
 
 def _setRandomEncoderResolution(minResolution=0.001):
   """
@@ -100,7 +94,6 @@ def _setRandomEncoderResolution(minResolution=0.001):
       encoder["resolution"] = resolution
 
 
-
 def createModel():
   _setRandomEncoderResolution()
   return ModelFactory.create(model_params.MODEL_PARAMS)
@@ -109,27 +102,19 @@ def select_cols(col):
   global headers
 
   for i, element in enumerate(headers[1:]):
-    if np.var(col[:,i]) < 1000:
+    if np.var(col[:,i]) < MIN_VARIANCE:
       headers.remove(element)
-     # print(model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"][element])
       model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"].pop(element)
 
-
-  print("here2 ", headers)
   print("ENDED UP USING ", len(headers), " columns total")
-  #print(model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"])
 	
 	
 def runAstroAnomaly():
-  total = len(data)
-
   shifter = InferenceShifter()
   output = nupic_anomaly_output.NuPICFileOutput("astronomy-data")
 
-  #with open (_INPUT_DATA_FILE) as fin:
-    #reader = data
   csvWriter = csv.writer(open(_OUTPUT_PATH,"wb"))
-  csvWriter.writerow(["timestamp", "b0", "anomaly_score"])
+  csvWriter.writerow(["timestamp", "b0", "b1", "scaled_score", "anomaly_score"])
 
   col0 = data.field(0)
   # data.field(1) is the image which we will ignore for now
@@ -142,7 +127,7 @@ def runAstroAnomaly():
   
   bs = headers[1:]
 
-  for i in tqdm.tqdm(range(0, total, 1), desc='% Complete'):
+  for i in tqdm.tqdm(range(0, DATA_SIZE, 1), desc='% Complete'):
   
     record = []
     for x, label in enumerate(bs):
@@ -152,7 +137,6 @@ def runAstroAnomaly():
     record = np.insert(record, 0, col0[i]-col0[0]) # insert timestamp value to front of record
     modelInput = dict(zip(headers, record))
 	
-
     for b in bs:
       modelInput[b] = float(modelInput[b])
 
@@ -160,16 +144,15 @@ def runAstroAnomaly():
     modelInput["timestamp"] = datetime.datetime.fromtimestamp(floattime)
 
     result = model.run(modelInput)
-    prediction = 0
     anomalyScore = result.inferences['anomalyScore']
-    
+    scaledScore = anomalyScore * ANOMALY_SCALE_FACTOR
     #likelihood = AL.anomalyProbability(modelInput["b0"], anomalyScore, modelInput["timestamp"])
 
-    output.write(modelInput['timestamp'], modelInput['b0'], prediction, anomalyScore)
+    output.write(modelInput['timestamp'], modelInput['b0'], 0, anomalyScore)
       
     if anomalyScore > _ANOMALY_THRESHOLD:
       _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", 			result.rawInput["timestamp"], anomalyScore)
-    csvWriter.writerow([floattime, modelInput["b0"], 
+    csvWriter.writerow([floattime, modelInput["b0"], scaledScore,
 	    "%.3f" % anomalyScore])
 
   print("Anomaly Scores have been written to",_OUTPUT_PATH)
