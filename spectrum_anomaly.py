@@ -148,6 +148,20 @@ def generate_model_input(col0, col, index):
   floattime = float(modelInput['timestamp'])
   modelInput["timestamp"] = datetime.datetime.fromtimestamp(floattime)
   return modelInput
+  
+def run_model(model, modelInput):
+    result = model.run(modelInput)
+    anomalyScore = result.inferences['anomalyScore']
+    scaledScore = anomalyScore * ANOMALY_SCALE_FACTOR
+    return anomalyScore, scaledScore
+	
+def output_results(output, csvWriter, modelInput, anomalyScore, scaledScore):
+  output.write(modelInput['timestamp'], modelInput['b0'], 0, anomalyScore)
+  
+  if anomalyScore > _ANOMALY_THRESHOLD:
+    _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", modelInput["timestamp"], anomalyScore)
+  csvWriter.writerow([modelInput["timestamp"], modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
+	
 	
 def runAstroAnomaly():
   shifter = InferenceShifter()
@@ -165,18 +179,11 @@ def runAstroAnomaly():
   model.enableInference({'predictedField': 'b0'})  # doesn't matter for anomaly detection
   
 
-
   for i in tqdm.tqdm(range(0, DATA_SIZE, 1), desc='% Complete'):
     modelInput = generate_model_input(col0, col, i)
-    result = model.run(modelInput)
-    anomalyScore = result.inferences['anomalyScore']
-    scaledScore = anomalyScore * ANOMALY_SCALE_FACTOR
-    output.write(modelInput['timestamp'], modelInput['b0'], 0, anomalyScore)
-      
-    if anomalyScore > _ANOMALY_THRESHOLD:
-      _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", 			result.rawInput["timestamp"], anomalyScore)
-    csvWriter.writerow([modelInput["timestamp"], modelInput["b0"], scaledScore,
-	    "%.3f" % anomalyScore])
+    anomalyScore, scaledScore = run_model(model, modelInput)
+    output_results(output, csvWriter, modelInput, anomalyScore, scaledScore)
+    
 
   print("Anomaly Scores have been written to",_OUTPUT_PATH)
   output.close()
