@@ -131,6 +131,26 @@ def replace_bad_intervals(col):
 
   print col
   return col
+  
+def preprocess(col):
+  col = select_cols(col)
+  col = replace_bad_intervals(col)
+  return col
+  
+def extract_cols_from_data(data):
+  col0 = data.field(0)
+  # data.field(1) is the image which we will ignore for now
+  col = data.field(2)
+  col = preprocess(col)
+  return col0, col
+  
+def setup_output():
+  shifter = InferenceShifter()
+  output = nupic_anomaly_output.NuPICFileOutput("astronomy-data")
+  f = open(_OUTPUT_PATH,"wb")
+  csvWriter = csv.writer(f)
+  csvWriter.writerow(["timestamp", "b0", "b1", "scaled_score", "anomaly_score"])
+  return f, output, csvWriter
 
 def generate_model_input(col0, col, index):
   bs = headers[1:]
@@ -161,32 +181,26 @@ def output_results(output, csvWriter, modelInput, anomalyScore, scaledScore):
   if anomalyScore > _ANOMALY_THRESHOLD:
     _LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", modelInput["timestamp"], anomalyScore)
   csvWriter.writerow([modelInput["timestamp"], modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
-	
+
+def close_output(f, output):
+  print("Anomaly Scores have been written to",_OUTPUT_PATH)
+  output.close()
+  f.close()
 	
 def runAstroAnomaly():
-  shifter = InferenceShifter()
-  output = nupic_anomaly_output.NuPICFileOutput("astronomy-data")
-  csvWriter = csv.writer(open(_OUTPUT_PATH,"wb"))
-  csvWriter.writerow(["timestamp", "b0", "b1", "scaled_score", "anomaly_score"])
-
-  col0 = data.field(0)
-  # data.field(1) is the image which we will ignore for now
-  col = data.field(2)
-  col = select_cols(col)
-  col = replace_bad_intervals(col)
-
+  f, output, csvWriter = setup_output()
+  col0, col = extract_cols_from_data(data)
+  
   model = createModel()
   model.enableInference({'predictedField': 'b0'})  # doesn't matter for anomaly detection
   
-
   for i in tqdm.tqdm(range(0, DATA_SIZE, 1), desc='% Complete'):
     modelInput = generate_model_input(col0, col, i)
     anomalyScore, scaledScore = run_model(model, modelInput)
     output_results(output, csvWriter, modelInput, anomalyScore, scaledScore)
     
+  close_output(f, output)
 
-  print("Anomaly Scores have been written to",_OUTPUT_PATH)
-  output.close()
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
