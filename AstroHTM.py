@@ -31,6 +31,7 @@ import datetime
 import logging
 import tqdm
 import optuna
+import copy
 import numpy as np
 import pandas as pd
 
@@ -47,18 +48,21 @@ from astropy.io import fits
 from astropy.io import ascii
 
 
-class AstroTest(object):
+class AstroHTM(object):
 
 	_LOGGER = logging.getLogger(__name__)
 	_SOURCE_FILE = './srcB_3to40_cl_barycorr_binned_multiD.fits'
+	#_SOURCE_FILE = 'nu80002092008B01_x2_bary_binned10.fits'
+	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
 	_OUTPUT_PATH = "spectrum5.csv"
   
 	_MIN_VARIANCE = 0
 	_ANOMALY_THRESHOLD = 0.5
 	_ANOMALY_SCALE_FACTOR = 300
-	_SELECT_COLS = True
+	_SELECT_COLS = False
 
 	anomaly_count = 0
+	encoder_resolution_set = False
 
 	# minimum metric value of test_data.flc
 	_INPUT_MIN = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0 ,0 ,0 ,0]  # changed to min flux value
@@ -71,13 +75,17 @@ class AstroTest(object):
 		self._MIN_VARIANCE = min_var
 
 		self.hdu_list = fits.open(self._SOURCE_FILE)
+		print("HDU LIST IS: ", self.hdu_list.info())
 		self.data = astropy.table.Table.read(self.hdu_list[1])
 		self.data_size = len(self.data)
+		print("LENGTH IS: ", self.data_size)
+		print("SELF.DATA is: ", self.data)
 		self.headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
 			'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
 			'b28', 'b29']
 			
 		#self.model = self.createModel()
+		self.encoders = model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"]
 
 	def get_anomaly_count(self):
 		return self.anomaly_count
@@ -88,20 +96,27 @@ class AstroTest(object):
 		RandomDistributed encoders. Modifies params in place.
 		"""
 		fields = self.headers[1:]
+		
 		print(fields)
+		print("GONNA SET RESOLUTIoN___________________________________________")
 
 		for i, field in enumerate(fields):
-			encoder = (model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"][field])
+			encoder = (copy.deepcopy(self.encoders[field]))
 
-		if encoder["type"] == "RandomDistributedScalarEncoder":
-			rangePadding = abs(self._INPUT_MAX[i] - self._INPUT_MIN[i]) * 0.2
-			minValue = self._INPUT_MIN[i] - rangePadding
-			maxValue = self._INPUT_MAX[i] + rangePadding
-			resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
-			encoder["resolution"] = resolution
+			if encoder["type"] == "RandomDistributedScalarEncoder":
+				rangePadding = abs(self._INPUT_MAX[i] - self._INPUT_MIN[i]) * 0.2
+				minValue = self._INPUT_MIN[i] - rangePadding
+				maxValue = self._INPUT_MAX[i] + rangePadding
+				resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
+				encoder["resolution"] = resolution
+
+			self.encoders[field] = encoder
+			
+		self.encoder_resolution_set = True
 
 	def createModel(self):
-		self._setRandomEncoderResolution()
+		if not self.encoder_resolution_set:
+			self._setRandomEncoderResolution()
 		return ModelFactory.create(model_params.MODEL_PARAMS)
 
 	def select_cols(self, col):
@@ -119,6 +134,7 @@ class AstroTest(object):
 		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
 			print(self._INPUT_MAX)
 			print("ENDED UP USING ", len(self.headers), " columns total")
+			self._SELECT_COLS = True
 		  
 		return col
 		
@@ -134,14 +150,16 @@ class AstroTest(object):
   
 	def preprocess(self, col):
 		col = self.select_cols(col)
-		col = self.replace_bad_intervals(col)
+		#col = self.replace_bad_intervals(col)
 		return col
   
 	def extract_cols_from_data(self):
 		col0 = self.data.field(0)
 		# self.data.field(1) is the image which we will ignore for now
 		col = self.data.field(2)
+		print("COL BEFORE PROCESSING: ", col)
 		col = self.preprocess(col)
+		print("COL AFTER PROCESSING: ", col)
 		return col0, col
   
 	def setup_output(self):
@@ -207,21 +225,38 @@ class AstroTest(object):
     
 		self.close_output(f, output)
 		
-  
+	def write_data_to_csv(self, output_file):
+		csvWriter = csv.writer(open(output_file,"wb"))
+		headers = ['timestamp', 'value1', 'value2', 'value3', 'value4', 'value5']
+		csvWriter.writerow(headers)
 
+		col0 = self.data.field(0)  # time
+		col1 = self.data.field(2)[:,0]  # value1
+		col2 = self.data.field(2)[:,1]  # value2
+		col3 = self.data.field(2)[:,2]  # value3
+		col4 = self.data.field(2)[:,3]  # value4
+		col5 = self.data.field(2)[:,4]  # value5
+		print(col0)
+		print(col1)
+		
+		for i in tqdm.tqdm(range(0, self.data_size, 1), desc='% Complete'):
+			record = [col0[i], col1[i], col2[i], col3[i], col4[i], col5[i]]
+			modelInput = dict(zip(headers, record))
+			modelInput["value1"] = float(modelInput["value1"])
+			modelInput["value2"] = float(modelInput["value2"])
+			modelInput["value3"] = float(modelInput["value3"])
+			modelInput["value4"] = float(modelInput["value4"])
+			modelInput["value5"] = float(modelInput["value5"])
+			floattime = float(modelInput['timestamp'])
 
-	def objective(self, trial):
-		self._MIN_VARIANCE = trial.suggest_int('_MIN_VARIANCE', 239, 241)
-		self.runAstroAnomaly()
-		return -1 * self.get_anomaly_count()
+			csvWriter.writerow([floattime, modelInput["value1"], modelInput["value2"], modelInput["value3"], modelInput["value4"], modelInput["value5"]])
+
+		print("Original data has been written to",output_file)
+		
+
 
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
-	
-	astro_test = AstroTest(233)
-	print(astro_test._MIN_VARIANCE)
-	
-	study = optuna.create_study()
-	study.optimize(astro_test.objective, n_trials=1)
+	#astro_test.write_data_to_csv('new_dataQPO10.csv')
 
 	
