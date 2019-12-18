@@ -60,7 +60,45 @@ class Output(object):
 		self.fileoutput.close()
 		self.fid.close()
 
+class Data(object):
+	h = 0
+	
+	def __init__(self, source_file, headers):
+		self.headers = headers
+	
+		self.hdu_list = fits.open(source_file)
+		self.table = astropy.table.Table.read(self.hdu_list[1])
+		self.data_size = len(self.table)
+		print("LENGTH IS: ", self.data_size)
+		print("SELF.DATATABLE is: ", self.table)
+		
+		self.timestamps = self.table.field(0)
+		self.images = self.table.field(1) # we ignore for now
+		self.spectrum = self.table.field(2)
+		
+		
+	def select_cols(self, min_variance):
+		for i, element in enumerate(self.headers[1:]):    
+			self.spectrum[:,i] =  self.spectrum[:,i] - np.mean(self.spectrum[:,i]) #/( np.std(self.spectrum[:,i]) )
+		#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(self.spectrum[:,i]) #/( np.std(self.dspectrum[:,i]) )
+			self.spectrum[:,i] = map(lambda x: max(x,0), self.spectrum[:,i])
 
+			if np.var(self.spectrum[:,i]) < min_variance:
+				self.headers.remove(element)
+				model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"].pop(element)
+			  
+		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
+		#print(self._INPUT_MAX)
+		print("ENDED UP USING ", len(self.headers), " columns total")
+		#self._SELECT_COLS = True
+		
+	def replace_bad_intervals(self):
+		df = pd.read_csv("psd1.csv")
+		saved_column = df['final signal'].values
+		saved_column = np.append(saved_column, [0])
+		self.spectrum[:,0] = saved_column
+
+		print self.spectrum
 
 
 class AstroHTM(object):
@@ -87,17 +125,13 @@ class AstroHTM(object):
 	_INPUT_MAX = [300]*30
 
 	def __init__(self, min_var):
-		self._MIN_VARIANCE = min_var
+		self._MIN_VARIANCE = min_var	
 
-		self.hdu_list = fits.open(self._SOURCE_FILE)
-		print("HDU LIST IS: ", self.hdu_list.info())
-		self.data = astropy.table.Table.read(self.hdu_list[1])
-		self.data_size = len(self.data)
-		print("LENGTH IS: ", self.data_size)
-		print("SELF.DATA is: ", self.data)
-		self.headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
+		headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
 			'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
 			'b28', 'b29']
+			
+		self.data = Data(self._SOURCE_FILE, headers)
 			
 		#self.model = self.createModel()
 		self.encoders = model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"]
@@ -110,7 +144,7 @@ class AstroHTM(object):
 		Given model params, figure out the correct resolution for the
 		RandomDistributed encoders. Modifies params in place.
 		"""
-		fields = self.headers[1:]
+		fields = self.data.headers[1:]
 		
 		print(fields)
 		print("GONNA SET RESOLUTIoN___________________________________________")
@@ -134,45 +168,17 @@ class AstroHTM(object):
 			self._setRandomEncoderResolution()
 		return ModelFactory.create(model_params.MODEL_PARAMS)
 
-	def select_cols(self):
+  
+	def setup_data(self):
+		print("SPECTRUM BEFORE PROCESSING: ", self.data.spectrum)
+		
 		if self._SELECT_COLS:
-
-			for i, element in enumerate(self.headers[1:]):    
-				self.col[:,i] =  self.col[:,i] - np.mean(self.col[:,i]) #/( np.std(self.col[:,i]) )
-			#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(self.col[:,i]) #/( np.std(self.col[:,i]) )
-				self.col[:,i] = map(lambda x: max(x,0), self.col[:,i])
-
-				if np.var(self.col[:,i]) < self._MIN_VARIANCE:
-					self.headers.remove(element)
-					model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"].pop(element)
-			  
-		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
-			print(self._INPUT_MAX)
-			print("ENDED UP USING ", len(self.headers), " columns total")
+			self.data.select_cols(self._MIN_VARIANCE)
 			self._SELECT_COLS = True
+			
+		#self.data.replace_bad_intervals()
 		
-		
-	def replace_bad_intervals(self):
-		df = pd.read_csv("psd1.csv")
-		saved_column = df['final signal'].values
-		saved_column = np.append(saved_column, [0])
-		self.col[:,0] = saved_column
-
-		print self.col
-
-  
-	def preprocess(self):
-		self.select_cols()
-		#self.replace_bad_intervals()
-
-  
-	def extract_cols_from_data(self):
-		self.col0 = self.data.field(0)
-		# self.data.field(1) is the image which we will ignore for now
-		self.col = self.data.field(2)
-		print("COL BEFORE PROCESSING: ", self.col)
-		self.preprocess()
-		print("COL AFTER PROCESSING: ", self.col)
+		print("SPECTRUM AFTER PROCESSING: ", self.data.spectrum)
 
   
 	def setup_output(self):
@@ -183,15 +189,15 @@ class AstroHTM(object):
 		record = []
 		for x, label in enumerate(bs):
 			col_number = int(label[1:])
-			record.append(self.col[:,col_number][index]) 
+			record.append(self.data.spectrum[:,col_number][index]) 
 	
-		record = np.insert(record, 0, self.col0[index]-self.col0[0]) # insert timestamp value to front of record
+		record = np.insert(record, 0, self.data.timestamps[index]-self.data.timestamps[0]) # insert timestamp value to front of record
 		return record
   
 	def generate_model_input(self, index):
-		bs = self.headers[1:]
+		bs = self.data.headers[1:]
 		record = self.generate_record(bs, index)
-		self.modelInput = dict(zip(self.headers, record))
+		self.modelInput = dict(zip(self.data.headers, record))
 	
 		for b in bs:
 			self.modelInput[b] = float(self.modelInput[b])
@@ -221,12 +227,12 @@ class AstroHTM(object):
 	def runAstroAnomaly(self):
 		print("Running with min var of: ", self._MIN_VARIANCE)
 		self.setup_output()
-		self.extract_cols_from_data()
+		self.setup_data()
   
 		self.model = self.createModel()
 		self.model.enableInference({'predictedField': 'b0'})  # doesn't matter for anomaly detection
 	  
-		for i in tqdm.tqdm(range(0, self.data_size, 1), desc='% Complete'):
+		for i in tqdm.tqdm(range(0, self.data.data_size, 1), desc='% Complete'):
 			self.generate_model_input(i)
 			anomalyScore, scaledScore = self.run_model()
 			self.output_results(anomalyScore, scaledScore)
@@ -238,16 +244,16 @@ class AstroHTM(object):
 		headers = ['timestamp', 'value1', 'value2', 'value3', 'value4', 'value5']
 		csvWriter.writerow(headers)
 
-		col0 = self.data.field(0)  # time
-		col1 = self.data.field(2)[:,0]  # value1
-		col2 = self.data.field(2)[:,1]  # value2
-		col3 = self.data.field(2)[:,2]  # value3
-		col4 = self.data.field(2)[:,3]  # value4
-		col5 = self.data.field(2)[:,4]  # value5
+		col0 = self.data.table.field(0)  # time
+		col1 = self.data.table.field(2)[:,0]  # value1
+		col2 = self.data.table.field(2)[:,1]  # value2
+		col3 = self.data.table.field(2)[:,2]  # value3
+		col4 = self.data.table.field(2)[:,3]  # value4
+		col5 = self.data.table.field(2)[:,4]  # value5
 		print(col0)
 		print(col1)
 		
-		for i in tqdm.tqdm(range(0, self.data_size, 1), desc='% Complete'):
+		for i in tqdm.tqdm(range(0, self.data.data_size, 1), desc='% Complete'):
 			record = [col0[i], col1[i], col2[i], col3[i], col4[i], col5[i]]
 			modelInput = dict(zip(headers, record))
 			modelInput["value1"] = float(modelInput["value1"])
