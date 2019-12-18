@@ -48,6 +48,21 @@ from astropy.io import fits
 from astropy.io import ascii
 
 
+class Output(object):
+	shifter = InferenceShifter()
+	fileoutput = nupic_anomaly_output.NuPICFileOutput("astronomy-data")
+	
+	def __init__(self, output_path):
+		self.fid = open(output_path, "wb")
+		self.csvWriter = csv.writer(self.fid)
+		
+	def close(self):
+		self.fileoutput.close()
+		self.fid.close()
+
+
+
+
 class AstroHTM(object):
 
 	_LOGGER = logging.getLogger(__name__)
@@ -59,7 +74,7 @@ class AstroHTM(object):
 	_MIN_VARIANCE = 0
 	_ANOMALY_THRESHOLD = 0.5
 	_ANOMALY_SCALE_FACTOR = 300
-	_SELECT_COLS = False
+	_SELECT_COLS = True
 
 	anomaly_count = 0
 	encoder_resolution_set = False
@@ -119,15 +134,15 @@ class AstroHTM(object):
 			self._setRandomEncoderResolution()
 		return ModelFactory.create(model_params.MODEL_PARAMS)
 
-	def select_cols(self, col):
+	def select_cols(self):
 		if self._SELECT_COLS:
 
 			for i, element in enumerate(self.headers[1:]):    
-				col[:,i] =  col[:,i] - np.mean(col[:,i]) #/( np.std(col[:,i]) )
-			#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(col[:,i]) #/( np.std(col[:,i]) )
-				col[:,i] = map(lambda x: max(x,0), col[:,i])
+				self.col[:,i] =  self.col[:,i] - np.mean(self.col[:,i]) #/( np.std(self.col[:,i]) )
+			#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(self.col[:,i]) #/( np.std(self.col[:,i]) )
+				self.col[:,i] = map(lambda x: max(x,0), self.col[:,i])
 
-				if np.var(col[:,i]) < self._MIN_VARIANCE:
+				if np.var(self.col[:,i]) < self._MIN_VARIANCE:
 					self.headers.remove(element)
 					model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"].pop(element)
 			  
@@ -135,95 +150,88 @@ class AstroHTM(object):
 			print(self._INPUT_MAX)
 			print("ENDED UP USING ", len(self.headers), " columns total")
 			self._SELECT_COLS = True
-		  
-		return col
 		
 		
-	def replace_bad_intervals(self, col):
+	def replace_bad_intervals(self):
 		df = pd.read_csv("psd1.csv")
 		saved_column = df['final signal'].values
 		saved_column = np.append(saved_column, [0])
-		col[:,0] = saved_column
+		self.col[:,0] = saved_column
 
-		print col
-		return col
+		print self.col
+
   
-	def preprocess(self, col):
-		col = self.select_cols(col)
-		#col = self.replace_bad_intervals(col)
-		return col
+	def preprocess(self):
+		self.select_cols()
+		#self.replace_bad_intervals()
+
   
 	def extract_cols_from_data(self):
-		col0 = self.data.field(0)
+		self.col0 = self.data.field(0)
 		# self.data.field(1) is the image which we will ignore for now
-		col = self.data.field(2)
-		print("COL BEFORE PROCESSING: ", col)
-		col = self.preprocess(col)
-		print("COL AFTER PROCESSING: ", col)
-		return col0, col
+		self.col = self.data.field(2)
+		print("COL BEFORE PROCESSING: ", self.col)
+		self.preprocess()
+		print("COL AFTER PROCESSING: ", self.col)
+
   
 	def setup_output(self):
-		shifter = InferenceShifter()
-		output = nupic_anomaly_output.NuPICFileOutput("astronomy-data")
-		f = open(self._OUTPUT_PATH,"wb")
-		csvWriter = csv.writer(f)
-		csvWriter.writerow(["timestamp", "b0", "b1", "scaled_score", "anomaly_score"])
-		return f, output, csvWriter
+		self.output = Output(self._OUTPUT_PATH)
+		self.output.csvWriter.writerow(["timestamp", "b0", "scaled_score", "anomaly_score"])
 
-	def generate_record(self, bs, col0, col, index):
+	def generate_record(self, bs, index):
 		record = []
 		for x, label in enumerate(bs):
 			col_number = int(label[1:])
-			record.append(col[:,col_number][index]) 
+			record.append(self.col[:,col_number][index]) 
 	
-		record = np.insert(record, 0, col0[index]-col0[0]) # insert timestamp value to front of record
+		record = np.insert(record, 0, self.col0[index]-self.col0[0]) # insert timestamp value to front of record
 		return record
   
-	def generate_model_input(self, col0, col, index):
+	def generate_model_input(self, index):
 		bs = self.headers[1:]
-		record = self.generate_record(bs, col0, col, index)
-		modelInput = dict(zip(self.headers, record))
+		record = self.generate_record(bs, index)
+		self.modelInput = dict(zip(self.headers, record))
 	
 		for b in bs:
-			modelInput[b] = float(modelInput[b])
+			self.modelInput[b] = float(self.modelInput[b])
 	
-		floattime = float(modelInput['timestamp'])
-		modelInput["timestamp"] = datetime.datetime.fromtimestamp(floattime)
-		return modelInput
+		floattime = float(self.modelInput['timestamp'])
+		self.modelInput["timestamp"] = datetime.datetime.fromtimestamp(floattime)
 
-	def run_model(self, modelInput):
-		result = self.model.run(modelInput)
+
+	def run_model(self):
+		result = self.model.run(self.modelInput)
 		anomalyScore = result.inferences['anomalyScore']
 		scaledScore = anomalyScore * self._ANOMALY_SCALE_FACTOR
 		return anomalyScore, scaledScore
 	
-	def output_results(self, output, csvWriter, modelInput, anomalyScore, scaledScore):
-		output.write(modelInput['timestamp'], modelInput['b0'], 0, anomalyScore)
-	  
+	def output_results(self, anomalyScore, scaledScore):
+		self.output.fileoutput.write(self.modelInput['timestamp'], self.modelInput['b0'], 0, anomalyScore)
+		
 		if anomalyScore > self._ANOMALY_THRESHOLD:
 			self.anomaly_count = self.anomaly_count + 1
-			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", modelInput["timestamp"], anomalyScore)
-		csvWriter.writerow([modelInput["timestamp"], modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
+			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", self.modelInput["timestamp"], anomalyScore)
+		self.output.csvWriter.writerow([self.modelInput["timestamp"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
 
-	def close_output(self, f, output):
+	def close_output(self):
 		print("Anomaly Scores have been written to", self._OUTPUT_PATH)
-		output.close()
-		f.close()
+		self.output.close()
 	
 	def runAstroAnomaly(self):
 		print("Running with min var of: ", self._MIN_VARIANCE)
-		f, output, csvWriter = self.setup_output()
-		col0, col = self.extract_cols_from_data()
+		self.setup_output()
+		self.extract_cols_from_data()
   
 		self.model = self.createModel()
 		self.model.enableInference({'predictedField': 'b0'})  # doesn't matter for anomaly detection
 	  
 		for i in tqdm.tqdm(range(0, self.data_size, 1), desc='% Complete'):
-			modelInput = self.generate_model_input(col0, col, i)
-			anomalyScore, scaledScore = self.run_model(modelInput)
-			self.output_results(output, csvWriter, modelInput, anomalyScore, scaledScore)
+			self.generate_model_input(i)
+			anomalyScore, scaledScore = self.run_model()
+			self.output_results(anomalyScore, scaledScore)
     
-		self.close_output(f, output)
+		self.close_output()
 		
 	def write_data_to_csv(self, output_file):
 		csvWriter = csv.writer(open(output_file,"wb"))
@@ -258,5 +266,3 @@ class AstroHTM(object):
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
 	#astro_test.write_data_to_csv('new_dataQPO10.csv')
-
-	
