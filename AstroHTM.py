@@ -61,7 +61,7 @@ class Output(object):
 		self.fid.close()
 
 class Data(object):
-	h = 0
+	headers = ["timestamp", "b0"]
 	
 	def __init__(self, source_file, headers):
 		self.headers = headers
@@ -99,14 +99,51 @@ class Data(object):
 		self.spectrum[:,0] = saved_column
 
 		print self.spectrum
+		
+	def generate_record(self, index, header_list = []):
+		if header_list == []:
+			header_list = self.headers
+			
+		record = []
+		for x, label in enumerate(header_list[1:]):
+			col_number = int(label[1:])
+			record.append(self.spectrum[:,col_number][index]) 
+	
+		record = np.insert(record, 0, self.timestamps[index]-self.timestamps[0]) # insert timestamp value to front of record
+		return record
+		
+		
+	def write_data_to_csv(self, output_file, header_list=[]):
+	# header_list is a list of the headers you want written to the csv. It defaults
+	# all headers in the data object if you dont provide a list
+		if header_list == []:
+			header_list = self.headers
+		
+		csvWriter = csv.writer(open(output_file,"wb"))
+		csvWriter.writerow(header_list)
+		print(self.headers)
+		
+		for i in tqdm.tqdm(range(0, self.data_size, 1), desc='% Complete'):
+			record = self.generate_record(i, header_list)
+			modelInput = dict(zip(header_list, record))
+			
+			for label in header_list:
+				modelInput[label] = float(modelInput[label])
+				
+			csvWriter.writerow([modelInput[x] for x in header_list])
+
+		print("Original data has been written to",output_file)
+		
+		
 
 
 class AstroHTM(object):
-
 	_LOGGER = logging.getLogger(__name__)
+	
 	_SOURCE_FILE = './srcB_3to40_cl_barycorr_binned_multiD.fits'
 	#_SOURCE_FILE = 'nu80002092008B01_x2_bary_binned10.fits'
 	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
+	
 	_OUTPUT_PATH = "spectrum5.csv"
   
 	_MIN_VARIANCE = 0
@@ -176,7 +213,7 @@ class AstroHTM(object):
 			self.data.select_cols(self._MIN_VARIANCE)
 			self._SELECT_COLS = True
 			
-		#self.data.replace_bad_intervals()
+		self.data.replace_bad_intervals()
 		
 		print("SPECTRUM AFTER PROCESSING: ", self.data.spectrum)
 
@@ -185,26 +222,16 @@ class AstroHTM(object):
 		self.output = Output(self._OUTPUT_PATH)
 		self.output.csvWriter.writerow(["timestamp", "b0", "scaled_score", "anomaly_score"])
 
-	def generate_record(self, bs, index):
-		record = []
-		for x, label in enumerate(bs):
-			col_number = int(label[1:])
-			record.append(self.data.spectrum[:,col_number][index]) 
-	
-		record = np.insert(record, 0, self.data.timestamps[index]-self.data.timestamps[0]) # insert timestamp value to front of record
-		return record
   
 	def generate_model_input(self, index):
-		bs = self.data.headers[1:]
-		record = self.generate_record(bs, index)
+		record = self.data.generate_record(index)
 		self.modelInput = dict(zip(self.data.headers, record))
 	
-		for b in bs:
+		for b in self.data.headers:
 			self.modelInput[b] = float(self.modelInput[b])
 	
-		floattime = float(self.modelInput['timestamp'])
-		self.modelInput["timestamp"] = datetime.datetime.fromtimestamp(floattime)
-
+		self.modelInput["timestamp"] = datetime.datetime.fromtimestamp(self.modelInput["timestamp"])
+		
 
 	def run_model(self):
 		result = self.model.run(self.modelInput)
@@ -219,10 +246,6 @@ class AstroHTM(object):
 			self.anomaly_count = self.anomaly_count + 1
 			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", self.modelInput["timestamp"], anomalyScore)
 		self.output.csvWriter.writerow([self.modelInput["timestamp"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
-
-	def close_output(self):
-		print("Anomaly Scores have been written to", self._OUTPUT_PATH)
-		self.output.close()
 	
 	def runAstroAnomaly(self):
 		print("Running with min var of: ", self._MIN_VARIANCE)
@@ -237,38 +260,13 @@ class AstroHTM(object):
 			anomalyScore, scaledScore = self.run_model()
 			self.output_results(anomalyScore, scaledScore)
     
-		self.close_output()
-		
-	def write_data_to_csv(self, output_file):
-		csvWriter = csv.writer(open(output_file,"wb"))
-		headers = ['timestamp', 'value1', 'value2', 'value3', 'value4', 'value5']
-		csvWriter.writerow(headers)
-
-		col0 = self.data.table.field(0)  # time
-		col1 = self.data.table.field(2)[:,0]  # value1
-		col2 = self.data.table.field(2)[:,1]  # value2
-		col3 = self.data.table.field(2)[:,2]  # value3
-		col4 = self.data.table.field(2)[:,3]  # value4
-		col5 = self.data.table.field(2)[:,4]  # value5
-		print(col0)
-		print(col1)
-		
-		for i in tqdm.tqdm(range(0, self.data.data_size, 1), desc='% Complete'):
-			record = [col0[i], col1[i], col2[i], col3[i], col4[i], col5[i]]
-			modelInput = dict(zip(headers, record))
-			modelInput["value1"] = float(modelInput["value1"])
-			modelInput["value2"] = float(modelInput["value2"])
-			modelInput["value3"] = float(modelInput["value3"])
-			modelInput["value4"] = float(modelInput["value4"])
-			modelInput["value5"] = float(modelInput["value5"])
-			floattime = float(modelInput['timestamp'])
-
-			csvWriter.writerow([floattime, modelInput["value1"], modelInput["value2"], modelInput["value3"], modelInput["value4"], modelInput["value5"]])
-
-		print("Original data has been written to",output_file)
-		
+		print("Anomaly Scores have been written to", self._OUTPUT_PATH)
+		self.output.close()
+				
 
 
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
-	#astro_test.write_data_to_csv('new_dataQPO10.csv')
+
+	detector = AstroHTM(250)
+	detector.data.write_data_to_csv('delete_me.csv', ["timestamp", "b0", "b2"])
