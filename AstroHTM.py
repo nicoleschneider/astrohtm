@@ -70,14 +70,14 @@ class Data(object):
 		self.table = astropy.table.Table.read(self.hdu_list[1])
 		self.data_size = len(self.table)
 		print("LENGTH IS: ", self.data_size)
-		print("SELF.DATATABLE is: ", self.table)
+		#print("SELF.DATATABLE is: ", self.table)
 		
 		self.timestamps = self.table.field(0)
 		self.images = self.table.field(1) # we ignore for now
 		self.spectrum = self.table.field(2)
 		
 		
-	def select_cols(self, min_variance):
+	def select_cols(self, min_variance, model_params):
 		for i, element in enumerate(self.headers[1:]):    
 			self.spectrum[:,i] =  self.spectrum[:,i] - np.mean(self.spectrum[:,i]) #/( np.std(self.spectrum[:,i]) )
 		#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(self.spectrum[:,i]) #/( np.std(self.dspectrum[:,i]) )
@@ -85,7 +85,8 @@ class Data(object):
 
 			if np.var(self.spectrum[:,i]) < min_variance:
 				self.headers.remove(element)
-				model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"].pop(element)
+				model_params["modelParams"]["sensorParams"]["encoders"].pop(element)
+				print("___________ SELECT COL JUsT REMOVED___________", element)
 			  
 		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
 		#print(self._INPUT_MAX)
@@ -144,12 +145,12 @@ class AstroHTM(object):
 	#_SOURCE_FILE = 'nu80002092008B01_x2_bary_binned10.fits'
 	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
 	
-	_OUTPUT_PATH = "spectrum5.csv"
+	
   
 	_MIN_VARIANCE = 0
 	_ANOMALY_THRESHOLD = 0.5
 	_ANOMALY_SCALE_FACTOR = 300
-	_SELECT_COLS = True
+	
 
 	anomaly_count = 0
 	encoder_resolution_set = False
@@ -161,17 +162,14 @@ class AstroHTM(object):
 	_INPUT_MAX = [439, 140, 41, 17, 12, 9, 9, 8, 11, 9, 10, 7, 6, 6, 7, 5, 7, 5, 7, 6, 6, 5, 5, 6, 5, 6, 4, 5, 5, 5] # changed to max flux value
 	_INPUT_MAX = [300]*30
 
-	def __init__(self, min_var):
-		self._MIN_VARIANCE = min_var	
-
-		headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
-			'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
-			'b28', 'b29']
-			
+	def __init__(self, min_var, headers, model_params, output_path, select_cols=False):
+		self._MIN_VARIANCE = min_var		
+		self._SELECT_COLS = select_cols
 		self.data = Data(self._SOURCE_FILE, headers)
-			
+		print(len(headers), " headers given originally")
 		#self.model = self.createModel()
-		self.encoders = model_params.MODEL_PARAMS["modelParams"]["sensorParams"]["encoders"]
+		self.model_params = copy.deepcopy(model_params)
+		self._OUTPUT_PATH = output_path
 
 	def get_anomaly_count(self):
 		return self.anomaly_count
@@ -183,39 +181,47 @@ class AstroHTM(object):
 		"""
 		fields = self.data.headers[1:]
 		
-		print(fields)
+		print("fields: ", fields)
 		print("GONNA SET RESOLUTIoN___________________________________________")
 
 		for i, field in enumerate(fields):
-			encoder = (copy.deepcopy(self.encoders[field]))
+			encoder = self.model_params["modelParams"]["sensorParams"]["encoders"][field]
 
-			if encoder["type"] == "RandomDistributedScalarEncoder":
+			if encoder["type"] == "RandomDistributedScalarEncoder" and "numBuckets" in encoder:
 				rangePadding = abs(self._INPUT_MAX[i] - self._INPUT_MIN[i]) * 0.2
 				minValue = self._INPUT_MIN[i] - rangePadding
 				maxValue = self._INPUT_MAX[i] + rangePadding
 				resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
 				encoder["resolution"] = resolution
 
-			self.encoders[field] = encoder
+			self.model_params['modelParams']['sensorParams']['encoders'][field] = encoder
+			#print(field)
 			
 		self.encoder_resolution_set = True
+		
+		for i in self.model_params['modelParams']['sensorParams']['encoders'].keys():
+			if i not in self.data.headers:
+				self.model_params['modelParams']['sensorParams']['encoders'].pop(i)
+				print(" heyyyyyyyyyyyyyyyyyyyyyy ", i, " was removed in reolution")
+			
+		#print("FINAL VERISONNNNNNNNNN")
+		#print(self.model_params)
 
 	def createModel(self):
-		if not self.encoder_resolution_set:
-			self._setRandomEncoderResolution()
-		return ModelFactory.create(model_params.MODEL_PARAMS)
+		self._setRandomEncoderResolution()
+		return ModelFactory.create(self.model_params)
 
   
 	def setup_data(self):
-		print("SPECTRUM BEFORE PROCESSING: ", self.data.spectrum)
+		#print("SPECTRUM BEFORE PROCESSING: ", self.data.spectrum)
 		
 		if self._SELECT_COLS:
-			self.data.select_cols(self._MIN_VARIANCE)
+			self.data.select_cols(self._MIN_VARIANCE, self.model_params)
 			self._SELECT_COLS = True
 			
-		self.data.replace_bad_intervals()
+		#self.data.replace_bad_intervals()
 		
-		print("SPECTRUM AFTER PROCESSING: ", self.data.spectrum)
+		#print("SPECTRUM AFTER PROCESSING: ", self.data.spectrum)
 
   
 	def setup_output(self):
@@ -268,5 +274,9 @@ class AstroHTM(object):
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
 
-	detector = AstroHTM(250)
+	headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
+				'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
+				'b28', 'b29']
+				
+	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, "spectrum4.csv")
 	detector.data.write_data_to_csv('delete_me.csv', ["timestamp", "b0", "b2"])
