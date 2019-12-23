@@ -49,15 +49,15 @@ from astropy.io import ascii
 
 
 class Output(object):
-	shifter = InferenceShifter()
-	fileoutput = nupic_anomaly_output.NuPICFileOutput("astronomy-data")
-	
+
 	def __init__(self, output_path):
 		self.fid = open(output_path, "wb")
 		self.csvWriter = csv.writer(self.fid)
 		
+	def write(self, entry_array):
+		self.csvWriter.writerow(entry_array)
+		
 	def close(self):
-		self.fileoutput.close()
 		self.fid.close()
 
 class Data(object):
@@ -70,7 +70,6 @@ class Data(object):
 		self.table = astropy.table.Table.read(self.hdu_list[1])
 		self.data_size = len(self.table)
 		print("LENGTH IS: ", self.data_size)
-		#print("SELF.DATATABLE is: ", self.table)
 		
 		self.timestamps = self.table.field(0)
 		self.images = self.table.field(1) # we ignore for now
@@ -89,9 +88,8 @@ class Data(object):
 				print("___________ SELECT COL JUsT REMOVED___________", element)
 			  
 		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
-		#print(self._INPUT_MAX)
 		print("ENDED UP USING ", len(self.headers), " columns total")
-		#self._SELECT_COLS = True
+		
 		
 	def replace_bad_intervals(self):
 		df = pd.read_csv("psd1.csv")
@@ -146,7 +144,6 @@ class AstroHTM(object):
 	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
 	
 	
-  
 	_MIN_VARIANCE = 0
 	_ANOMALY_THRESHOLD = 0.5
 	_ANOMALY_SCALE_FACTOR = 300
@@ -195,17 +192,14 @@ class AstroHTM(object):
 				encoder["resolution"] = resolution
 
 			self.model_params['modelParams']['sensorParams']['encoders'][field] = encoder
-			#print(field)
 			
 		self.encoder_resolution_set = True
 		
 		for i in self.model_params['modelParams']['sensorParams']['encoders'].keys():
 			if i not in self.data.headers:
 				self.model_params['modelParams']['sensorParams']['encoders'].pop(i)
-				print(" heyyyyyyyyyyyyyyyyyyyyyy ", i, " was removed in reolution")
-			
-		#print("FINAL VERISONNNNNNNNNN")
-		#print(self.model_params)
+				print(i, " was removed in reolution")
+
 
 	def createModel(self):
 		self._setRandomEncoderResolution()
@@ -226,7 +220,7 @@ class AstroHTM(object):
   
 	def setup_output(self):
 		self.output = Output(self._OUTPUT_PATH)
-		self.output.csvWriter.writerow(["timestamp", "b0", "scaled_score", "anomaly_score"])
+		self.output.write(["timestamp", "b0", "scaled_score", "anomaly_score"])
 
   
 	def generate_model_input(self, index):
@@ -246,12 +240,11 @@ class AstroHTM(object):
 		return anomalyScore, scaledScore
 	
 	def output_results(self, anomalyScore, scaledScore):
-		self.output.fileoutput.write(self.modelInput['timestamp'], self.modelInput['b0'], 0, anomalyScore)
-		
+
 		if anomalyScore > self._ANOMALY_THRESHOLD:
 			self.anomaly_count = self.anomaly_count + 1
 			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", self.modelInput["timestamp"], anomalyScore)
-		self.output.csvWriter.writerow([self.modelInput["timestamp"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
+		self.output.write([self.modelInput["timestamp"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
 	
 	def runAstroAnomaly(self):
 		print("Running with min var of: ", self._MIN_VARIANCE)
