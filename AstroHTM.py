@@ -39,18 +39,26 @@ from pkg_resources import resource_filename
 from nupic.frameworks.opf.model_factory import ModelFactory
 from nupic.data.inference_shifter import InferenceShifter
 from nupic.algorithms import anomaly_likelihood as AL
-
 import model_params
-import nupic_anomaly_output
-
 import astropy
 from astropy.io import fits
 from astropy.io import ascii
 
 
 class Output(object):
+	"""
+	This class handles the output of data and results to csv file
+	format for future visualization.
+	"""
 
 	def __init__(self, output_path):
+		"""
+		Parameters:
+		------------
+		@param output_path (string)
+			The filename to whioh the output will be written
+		"""
+		
 		self.fid = open(output_path, "wb")
 		self.csvWriter = csv.writer(self.fid)
 		
@@ -61,9 +69,24 @@ class Output(object):
 		self.fid.close()
 
 class Data(object):
+	"""
+	This class handles the data and reads it into a table so it can be easily used
+	by the anomaly detection algorithm.
+	"""
+	
 	headers = ["timestamp", "b0"]
 	
 	def __init__(self, source_file, headers):
+		"""
+		Parameters:
+		------------
+		@param source_file (string)
+			The filename where the data is stored (.fits file expected)
+		
+		@param headers (int array)
+			List of the headers (timestamp nad spectrum labels like b0, b1, etc)
+			to be considered.
+		"""
 		self.headers = headers
 	
 		self.hdu_list = fits.open(source_file)
@@ -135,19 +158,19 @@ class Data(object):
 		
 		
 
-
 class AstroHTM(object):
+	"""
+	This class represents the hierarchical temporal memory algorithm to be 
+	applied to astronomy data.
+	"""
 	_LOGGER = logging.getLogger(__name__)
 	
-	_SOURCE_FILE = './srcB_3to40_cl_barycorr_binned_multiD.fits'
-	#_SOURCE_FILE = 'nu80002092008B01_x2_bary_binned10.fits'
+	##_SOURCE_FILE = './srcB_3to40_cl_barycorr_binned_multiD.fits'
+	_SOURCE_FILE = 'nu80002092008A01_x2_bary_binned10.fits'
 	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
 	
-	
 	_MIN_VARIANCE = 0
-	_ANOMALY_THRESHOLD = 0.5
 	_ANOMALY_SCALE_FACTOR = 300
-	
 
 	anomaly_count = 0
 	encoder_resolution_set = False
@@ -159,9 +182,30 @@ class AstroHTM(object):
 	_INPUT_MAX = [439, 140, 41, 17, 12, 9, 9, 8, 11, 9, 10, 7, 6, 6, 7, 5, 7, 5, 7, 6, 6, 5, 5, 6, 5, 6, 4, 5, 5, 5] # changed to max flux value
 	_INPUT_MAX = [300]*30
 
-	def __init__(self, min_var, headers, model_params, output_path, select_cols=False):
+	
+	def __init__(self, min_var, headers, model_params, output_path, select_cols=False, threshold = 0.5):
+		"""
+		Parameters:
+		------------
+		@param min_var (int)
+			The minimum variance a spectrum column will have else it is dropped
+		
+		@param model_params (dictionary)
+			The dictionary of parameters for the HTM model to used
+			
+		@param output_path (string)
+			The filename to whioh the output will be written (.csv extected)
+			
+		@param select_cols (boolean)
+			True if columns should be removed for having low variance, false otherwise
+			
+		@param threshold (float from 0 to 1)
+			Determines how high an anomaly score must be in order to register as an anomaly
+		"""
+		
 		self._MIN_VARIANCE = min_var		
 		self._SELECT_COLS = select_cols
+		self._ANOMALY_THRESHOLD = threshold
 		self.data = Data(self._SOURCE_FILE, headers)
 		print(len(headers), " headers given originally")
 		#self.model = self.createModel()
@@ -177,9 +221,6 @@ class AstroHTM(object):
 		RandomDistributed encoders. Modifies params in place.
 		"""
 		fields = self.data.headers[1:]
-		
-		print("fields: ", fields)
-		print("GONNA SET RESOLUTIoN___________________________________________")
 
 		for i, field in enumerate(fields):
 			encoder = self.model_params["modelParams"]["sensorParams"]["encoders"][field]
@@ -190,6 +231,7 @@ class AstroHTM(object):
 				maxValue = self._INPUT_MAX[i] + rangePadding
 				resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
 				encoder["resolution"] = resolution
+				#print("RESOLUTION________________", resolution)
 
 			self.model_params['modelParams']['sensorParams']['encoders'][field] = encoder
 			
@@ -210,8 +252,9 @@ class AstroHTM(object):
 		#print("SPECTRUM BEFORE PROCESSING: ", self.data.spectrum)
 		
 		if self._SELECT_COLS:
+			print("SELECTING COLS FROM HERE ____ _______ ______________________________")
 			self.data.select_cols(self._MIN_VARIANCE, self.model_params)
-			self._SELECT_COLS = True
+			self._SELECT_COLS = False
 			
 		#self.data.replace_bad_intervals()
 		
@@ -238,13 +281,14 @@ class AstroHTM(object):
 		anomalyScore = result.inferences['anomalyScore']
 		scaledScore = anomalyScore * self._ANOMALY_SCALE_FACTOR
 		return anomalyScore, scaledScore
+		
 	
 	def output_results(self, anomalyScore, scaledScore):
-
 		if anomalyScore > self._ANOMALY_THRESHOLD:
 			self.anomaly_count = self.anomaly_count + 1
 			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", self.modelInput["timestamp"], anomalyScore)
 		self.output.write([self.modelInput["timestamp"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
+	
 	
 	def runAstroAnomaly(self):
 		print("Running with min var of: ", self._MIN_VARIANCE)
@@ -272,4 +316,4 @@ if __name__ == "__main__":
 				'b28', 'b29']
 				
 	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, "spectrum4.csv")
-	detector.data.write_data_to_csv('delete_me.csv', ["timestamp", "b0", "b2"])
+	detector.data.write_data_to_csv('nu80002092008A01_x2_bary_binned10.csv', ["timestamp", "b0", "b2", "b3"])
