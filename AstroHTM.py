@@ -20,9 +20,7 @@
 # ----------------------------------------------------------------------
 
 """
-A simple client to create a HTM anomaly detection model for astro_test dataset.
-The script prints out all records that have an abnormally high anomaly
-score.
+A client to process an astronomy dataset and create a HTM anomaly detection model for it.
 """
 from __future__ import division
 
@@ -39,6 +37,7 @@ from pkg_resources import resource_filename
 from nupic.frameworks.opf.model_factory import ModelFactory
 from nupic.data.inference_shifter import InferenceShifter
 from nupic.algorithms import anomaly_likelihood as AL
+
 import model_params
 import astropy
 from astropy.io import fits
@@ -97,6 +96,7 @@ class Data(object):
 		self.timestamps = self.table.field(0)
 		self.images = self.table.field(1) # we ignore for now
 		self.spectrum = self.table.field(2)
+		print(self.spectrum)
 		
 		
 	def select_cols(self, min_variance, model_params):
@@ -361,4 +361,4 @@ if __name__ == "__main__":
 				'b28', 'b29']
 				
 	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, "spectrum4.csv")
-	detector.data.write_data_to_csv('nu80002092008A01_x2_bary_binned10.csv', ["timestamp", "b0", "b2", "b3"])
+	detector.data.write_data_to_csv('nu80002092008A01_x2_bary_binned10.csv')
