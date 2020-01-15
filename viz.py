@@ -6,47 +6,59 @@ import pandas as pd
 from pandas import DataFrame, read_csv
 import numpy as np
 
-input_filename = 'nu80002092008A01_x2_bary_binned10.csv'
-output_filename = 'spectra.png'
-_MIN_TIMESTAMP = 1000
-_MAX_TIMESTAMP = 1500
+class Viz(object):
 
-_MIN_SPECTRA = 0  # must be >= 0
-_MAX_SPECTRA = 30  # must be <= df size - 1
+	_MIN_TIMESTAMP = 1000
+	_MAX_TIMESTAMP = 1500
 
-def trim_timestamp(xs, ys, min, max):
-	xs = xs[min:max]
-	ys = ys[min:max]
-	return xs, ys
+	_MIN_SPECTRA = 0  # must be >= 0
+	_MAX_SPECTRA = 30  # must be <= df size - 1
 
-def choose_spectra(df, start, fin):
-	droplist = [x for x in range(0, start)] + [y for y in range(fin, len(df.columns)-1)]
-	labels = ['b' + str(z) for z in droplist]
-	print(labels)
-	return df.drop(labels, axis='columns')
+	def __init__(self, input_filename):
+		self.df = read_csv(input_filename)
+		self.num_spectra = len(self.df.columns) - 1
+		self.choose_spectra(self._MIN_SPECTRA, self._MAX_SPECTRA)
+		print "size:", self.num_spectra
+
+	def trim_timestamp(self, xs, ys, min, max):
+		xs = xs[min:max]
+		ys = ys[min:max]
+		return xs, ys
+
+	def choose_spectra(self, start, fin):
+		droplist = [x for x in range(0, start)] + [y for y in range(fin, self.num_spectra)]
+		labels = ['b' + str(z) for z in droplist]
+		print(labels)
+		self.df = self.df.drop(labels, axis='columns')  # update df
+		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
+
+	def plot(self, output_filename):
+		fig, axs = plt.subplots(self.num_spectra, sharex=True, sharey=True)
+		fig.suptitle('Spectra')
+
+		for i in range(self.num_spectra):
+			xs = np.array(self.df['timestamp'])
+			ys = np.array(self.df[self.df.columns[1::1]])[:,i]
+			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
+			axs[i].plot(xs, ys)
+		
+		
+		for ax in axs:
+			ax.label_outer()
+			ax.get_yaxis().set_visible(False)
 
 
-df = read_csv(input_filename)
-df = choose_spectra(df, _MIN_SPECTRA, _MAX_SPECTRA)
-print "size:", len(df.columns)
+		plt.xlabel('Timestamp')    
+		plt.show()
+		plt.savefig(output_filename)
 
-fig, axs = plt.subplots(len(df.columns)-1, sharex=True, sharey=True)
-fig.suptitle('Spectra')
-
-for i in range(len(df.columns)-1):
-	xs = np.array(df['timestamp'])
-	ys = np.array(df[df.columns[1::1]])[:,i]
-	xs, ys = trim_timestamp(xs, ys, _MIN_TIMESTAMP, _MAX_TIMESTAMP)
-	axs[i].plot(xs, ys)
 	
 	
-for ax in axs:
-	ax.label_outer()
-	ax.get_yaxis().set_visible(False)
+if __name__ == "__main__":
+	input_filename = 'nu80002092008A01_x2_bary_binned10.csv'
+	output_filename = 'spectra.png'
+	
+	viz = Viz(input_filename)
+	viz.plot(output_filename)
 
-
-plt.xlabel('Timestamp')    
-plt.show()
-plt.savefig(output_filename)
-
-print "Plot was saved to", output_filename
+	print "Plot was saved to", output_filename
