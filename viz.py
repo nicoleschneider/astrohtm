@@ -8,15 +8,14 @@ import numpy as np
 
 class Viz(object):
 	"""
-	This class represents the visualization of the spectra in a dataset.
+	This class represents the visualization of the spectra in a dataset. 
+	It takes spectra and timestamp information from a csv file and plots
+	the spectra at a specified time interval. The spectra plotted are 
+	specified from _MIN_SPECTRA to _MAX_SPECTRA.
 	"""
-	_MIN_TIMESTAMP = 1000
-	_MAX_TIMESTAMP = 1500
+	
 
-	_MIN_SPECTRA = 0  # must be >= 0
-	_MAX_SPECTRA = 30  # must be <= df size - 1
-
-	def __init__(self, input_filename):
+	def __init__(self, input_filename, min_time, max_time, min_spectra, max_spectra):
 		"""
 		Parameters:
 		------------
@@ -26,6 +25,13 @@ class Viz(object):
 		"""
 		self.df = read_csv(input_filename)
 		self.num_spectra = len(self.df.columns) - 1
+		
+		self._MIN_TIMESTAMP = min_time
+		self._MAX_TIMESTAMP = max_time
+
+		self._MIN_SPECTRA = min_spectra  # must be >= 0
+		self._MAX_SPECTRA = max_spectra  # must be <= df size - 1 i.e. 30 or less
+		
 		self.choose_spectra(self._MIN_SPECTRA, self._MAX_SPECTRA)
 		print "size:", self.num_spectra
 
@@ -62,8 +68,8 @@ class Viz(object):
 		"""
 		droplist = [x for x in range(0, start)] + [y for y in range(fin, self.num_spectra)]
 		labels = ['b' + str(z) for z in droplist]
-		print(labels)
-		self.df = self.df.drop(labels, axis='columns')  # update df
+		print "Dropping the following spectra:", labels
+		self.df = self.df.drop(labels, axis='columns')  # drop spectra from the dataframe
 		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
 
 	def plot(self, output_filename):
@@ -82,11 +88,9 @@ class Viz(object):
 			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
 			axs[i].plot(xs, ys)
 		
-		
 		for ax in axs:
-			ax.label_outer()
+			ax.label_outer()  # remove axis info on all but outer plots
 			ax.get_yaxis().set_visible(False)
-
 
 		plt.xlabel('Timestamp')    
 		plt.show()
@@ -97,7 +101,13 @@ if __name__ == "__main__":
 	input_filename = 'nu80002092008A01_x2_bary_binned10.csv'
 	output_filename = 'spectra.png'
 	
-	viz = Viz(input_filename)
+	min_time = 1000
+	max_time = 1500
+
+	min_spectra = 0  # must be >= 0
+	max_spectra = 30  # must be <= df size - 1 i.e. 30 or less
+	
+	viz = Viz(input_filename, min_time, max_time, min_spectra, max_spectra)
 	viz.plot(output_filename)
 
 	print "Plot was saved to", output_filename
