@@ -37,6 +37,7 @@ from pkg_resources import resource_filename
 from nupic.frameworks.opf.model_factory import ModelFactory
 from nupic.data.inference_shifter import InferenceShifter
 from nupic.algorithms import anomaly_likelihood as AL
+from viz import Viz
 
 import model_params
 import astropy
@@ -359,6 +360,21 @@ if __name__ == "__main__":
 	headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
 				'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
 				'b28', 'b29']
-				
+	
+	# Build and run anomaly detector 
 	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, "spectrum4.csv")
-	detector.data.write_data_to_csv('nu80002092008A01_x2_bary_binned10.csv')
+	detector.runAstroAnomaly()
+	
+	# Write original spectra to csv
+	spectrum_file = 'nu80002092008A01_x2_bary_binned10.csv'
+	detector.data.write_data_to_csv(spectrum_file)
+	
+	# Visualize original spectra
+	output_filename = 'spectra.png'
+	viz = Viz(spectrum_file, 1000, 3000, 0, 30)
+	viz.plot(output_filename)
+	print "Plot was saved to", output_filename
+	
+	
+	
+	
