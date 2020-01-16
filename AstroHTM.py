@@ -310,6 +310,7 @@ class AstroHTM(object):
 		for b in self.data.headers:
 			self.modelInput[b] = float(self.modelInput[b])
 	
+		self.modelInput["float"] = self.modelInput["timestamp"]
 		self.modelInput["timestamp"] = datetime.datetime.fromtimestamp(self.modelInput["timestamp"])
 		
 
@@ -333,7 +334,7 @@ class AstroHTM(object):
 		if anomalyScore > self._ANOMALY_THRESHOLD:
 			self.anomaly_count = self.anomaly_count + 1
 			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", self.modelInput["timestamp"], anomalyScore)
-		self.output.write([self.modelInput["timestamp"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
+		self.output.write([self.modelInput["float"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
 	
 	
 	def runAstroAnomaly(self):
@@ -362,7 +363,8 @@ if __name__ == "__main__":
 				'b28', 'b29']
 	
 	# Build and run anomaly detector 
-	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, "spectrum4.csv")
+	anomaly_file = "spectrum4.csv"
+	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, anomaly_file)
 	detector.runAstroAnomaly()
 	
 	# Write original spectra to csv
@@ -371,10 +373,8 @@ if __name__ == "__main__":
 	
 	# Visualize original spectra
 	output_filename = 'spectra.png'
-	viz = Viz(spectrum_file, 1000, 3000, 0, 30)
+	viz = Viz(spectrum_file, anomaly_file, 0, 3000, 0, 30)
 	viz.plot(output_filename)
 	print "Plot was saved to", output_filename
-	
-	
 	
 	
