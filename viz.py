@@ -15,7 +15,7 @@ class Viz(object):
 	"""
 	
 
-	def __init__(self, input_filename, min_time, max_time, min_spectra, max_spectra):
+	def __init__(self, input_filename, anomaly_filename, min_time, max_time, min_spectra, max_spectra):
 		"""
 		Parameters:
 		------------
@@ -33,6 +33,7 @@ class Viz(object):
 		self._MAX_SPECTRA = max_spectra  # must be <= df size - 1 i.e. 30 or less
 		
 		self.choose_spectra(self._MIN_SPECTRA, self._MAX_SPECTRA)
+		self.add_anomalies(anomaly_filename)
 		print "size:", self.num_spectra
 
 	def trim_timestamp(self, xs, ys, min, max):
@@ -71,6 +72,15 @@ class Viz(object):
 		print "Dropping the following spectra:", labels
 		self.df = self.df.drop(labels, axis='columns')  # drop spectra from the dataframe
 		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
+		
+	def add_anomalies(self, anomaly_filename):
+		anomaly_df = read_csv(anomaly_filename)
+		anomaly_df = anomaly_df.drop("b0", axis='columns')
+		anomaly_df = anomaly_df.drop("scaled_score", axis='columns')
+		print(anomaly_df)
+		self.df = self.df.join(anomaly_df.set_index('timestamp'), on='timestamp',lsuffix='_caller', rsuffix='_temp')
+		print self.df
+		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
 
 	def plot(self, output_filename):
 		"""
@@ -101,7 +111,7 @@ if __name__ == "__main__":
 	input_filename = 'nu80002092008A01_x2_bary_binned10.csv'
 	output_filename = 'spectra.png'
 	
-	min_time = 1000
+	min_time = 0
 	max_time = 1500
 
 	min_spectra = 0  # must be >= 0
