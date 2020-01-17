@@ -64,6 +64,10 @@ class Viz(object):
 
 		self.df = self.df.join(anomaly_df.set_index('timestamp'), on='timestamp',lsuffix='_caller', rsuffix='_temp')
 		print self.df
+		
+		first_cols = ['timestamp', 'anomaly_score']
+		self.df = self.df[[c for c in first_cols if c in self.df] + [c for c in self.df if c not in first_cols]]
+		print self.df
 		self.num_cols = len(self.df.columns) - 1  # update number of columns being used
 
 	def trim_timestamp(self, xs, ys, min, max):
@@ -99,9 +103,12 @@ class Viz(object):
 
 		for i in range(self.num_cols):
 			xs = np.array(self.df['timestamp'])
-			ys = np.array(self.df[self.df.columns[1::1]])[:,i]
+			ys = np.array(self.df[self.df.columns[1:]])[:,i]
 			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
-			axs[i].plot(xs, ys)
+			if i == 0:  # if anomaly score
+				axs[i].plot(xs, ys, 'r')  # plot as red
+			else:
+				axs[i].plot(xs, ys, 'b')  # plot as blue
 		
 		for ax in axs:
 			ax.label_outer()  # remove axis info on all but outer plots
