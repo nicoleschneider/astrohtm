@@ -14,14 +14,19 @@ class Viz(object):
 	specified from _MIN_SPECTRA to _MAX_SPECTRA.
 	"""
 	
-
-	def __init__(self, input_filename, anomaly_filename, min_time, max_time, min_spectra, max_spectra):
+	def __init__(self, input_filename, min_time, max_time):
 		"""
 		Parameters:
 		------------
 		@param input_filename (string)
 			The csv file containing the spectral data with one column for timestamp
 			and the remaining columns for historgram bins labeled b0, b1, etc
+			
+		@param min_time (int)
+			The lower bound on the timestamp value to include in the plot
+			
+		@param max_time (int)
+			The upper bound on the timestamp value to include in the plot
 		"""
 		self.df = read_csv(input_filename)
 		self.num_spectra = len(self.df.columns) - 1
@@ -29,12 +34,37 @@ class Viz(object):
 		self._MIN_TIMESTAMP = min_time
 		self._MAX_TIMESTAMP = max_time
 
-		self._MIN_SPECTRA = min_spectra  # must be >= 0
-		self._MAX_SPECTRA = max_spectra  # must be <= df size - 1 i.e. 30 or less
+	def choose_spectra(self, start, fin):
+		"""
+		Parameters:
+		------------
+		@param start (int)
+			The first (lowest) spectra to include in the visualization
+			
+		@param fin (int)
+			The last (highest) spectra to include in the visualization
+		"""
+		droplist = [x for x in range(0, start)] + [y for y in range(fin, self.num_spectra)]
+		labels = ['b' + str(z) for z in droplist]
+		print "Dropping the following spectra:", labels
+		self.df = self.df.drop(labels, axis='columns')  # drop spectra from the dataframe
+		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
 		
-		self.choose_spectra(self._MIN_SPECTRA, self._MAX_SPECTRA)
-		self.add_anomalies(anomaly_filename)
-		print "size:", self.num_spectra
+		
+	def add_anomalies(self, anomaly_filename):
+		"""
+		Parameters:
+		------------
+		@param anomaly_filename (string)
+			The csv file containing timestamps in float form and anomaly scores
+		"""
+		anomaly_df = read_csv(anomaly_filename)
+		anomaly_df = anomaly_df.drop("b0", axis='columns')
+		anomaly_df = anomaly_df.drop("scaled_score", axis='columns')
+
+		self.df = self.df.join(anomaly_df.set_index('timestamp'), on='timestamp',lsuffix='_caller', rsuffix='_temp')
+		print self.df
+		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
 
 	def trim_timestamp(self, xs, ys, min, max):
 		"""
@@ -56,32 +86,7 @@ class Viz(object):
 		xs = xs[min:max]
 		ys = ys[min:max]
 		return xs, ys
-
-	def choose_spectra(self, start, fin):
-		"""
-		Parameters:
-		------------
-		@param start (int)
-			The first (lowest) spectra to include in the visualization
-			
-		@param fin (int)
-			The last (highest) spectra to include in the visualization
-		"""
-		droplist = [x for x in range(0, start)] + [y for y in range(fin, self.num_spectra)]
-		labels = ['b' + str(z) for z in droplist]
-		print "Dropping the following spectra:", labels
-		self.df = self.df.drop(labels, axis='columns')  # drop spectra from the dataframe
-		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
 		
-	def add_anomalies(self, anomaly_filename):
-		anomaly_df = read_csv(anomaly_filename)
-		anomaly_df = anomaly_df.drop("b0", axis='columns')
-		anomaly_df = anomaly_df.drop("scaled_score", axis='columns')
-		print(anomaly_df)
-		self.df = self.df.join(anomaly_df.set_index('timestamp'), on='timestamp',lsuffix='_caller', rsuffix='_temp')
-		print self.df
-		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
-
 	def plot(self, output_filename):
 		"""
 		Parameters:
@@ -110,14 +115,19 @@ class Viz(object):
 if __name__ == "__main__":
 	input_filename = 'nu80002092008A01_x2_bary_binned10.csv'
 	output_filename = 'spectra.png'
+	anomaly_filename = 'spectrum4.csv'
 	
-	min_time = 0
-	max_time = 1500
+	min_time =   # must be >= 0
+	max_time = 1500  # must be <= max time in dataset i.e. 6000 or less
 
 	min_spectra = 0  # must be >= 0
 	max_spectra = 30  # must be <= df size - 1 i.e. 30 or less
 	
-	viz = Viz(input_filename, min_time, max_time, min_spectra, max_spectra)
+	viz = Viz(input_filename, min_time, max_time)
+	viz.choose_spectra(min_spectra, max_spectra)
+	viz.add_anomalies(anomaly_filename)
+	print "size:", viz.num_spectra
+		
 	viz.plot(output_filename)
 
 	print "Plot was saved to", output_filename
