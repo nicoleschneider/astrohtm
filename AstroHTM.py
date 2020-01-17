@@ -30,6 +30,7 @@ import logging
 import tqdm
 import optuna
 import copy
+import sys
 import numpy as np
 import pandas as pd
 
@@ -58,7 +59,6 @@ class Output(object):
 		@param output_path (string)
 			The filename to whioh the output will be written
 		"""
-		
 		self.fid = open(output_path, "wb")
 		self.csvWriter = csv.writer(self.fid)
 		
@@ -73,8 +73,6 @@ class Data(object):
 	This class handles the data and reads it into a table so it can be easily used
 	by the anomaly detection algorithm.
 	"""
-	
-	headers = ["timestamp", "b0"]
 	
 	def __init__(self, source_file, headers):
 		"""
@@ -97,18 +95,18 @@ class Data(object):
 		self.timestamps = self.table.field(0)
 		self.images = self.table.field(1) # we ignore for now
 		self.spectrum = self.table.field(2)
+		self.spectrum_size = len(self.headers)-1
 		print(self.spectrum)
 		
 	
 	def set_input_stats(self):	
-		self._INPUT_MIN = [0]*30  # minimum metric value of the input data
-		self._INPUT_MAX = [0]*30  # maximum metric value of the input data
+		self._INPUT_MIN = [0]*self.spectrum_size  # minimum metric value of the input data
+		self._INPUT_MAX = [0]*self.spectrum_size  # maximum metric value of the input data
 		
-		for i in range(len(self.headers)-1):
+		for i in range(self.spectrum_size):
 			self._INPUT_MAX[i] = np.max(self.spectrum[:,i])
 			self._INPUT_MIN[i] = np.min(self.spectrum[:,i])
 
-		
 		
 	def select_cols(self, min_variance, model_params):
 		"""
@@ -212,9 +210,7 @@ class AstroHTM(object):
 	_SOURCE_FILE = 'nu80002092008A01_x2_bary_binned10.fits'
 	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
 	
-	_MIN_VARIANCE = 0
 	_ANOMALY_SCALE_FACTOR = 300
-
 	anomaly_count = 0
 	encoder_resolution_set = False
 
@@ -239,7 +235,6 @@ class AstroHTM(object):
 		@param threshold (float from 0 to 1)
 			Determines how high an anomaly score must be in order to register as an anomaly
 		"""
-		
 		self._MIN_VARIANCE = min_var		
 		self._SELECT_COLS = select_cols
 		self._ANOMALY_THRESHOLD = threshold
@@ -369,9 +364,16 @@ if __name__ == "__main__":
 				'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
 				'b28', 'b29']
 	
+	# Parse command line arguments
+	args = sys.argv[1:]
+	VARIANCE_CUTOFF = float(args[0])
+	TIME_MIN        = int(args[1])
+	TIME_MAX        = int(args[2])
+	
+	
 	# Build and run anomaly detector 
 	anomaly_file = "spectrum4.csv"
-	detector = AstroHTM(0.001, headers, model_params.MODEL_PARAMS, anomaly_file, select_cols=True)
+	detector = AstroHTM(VARIANCE_CUTOFF, headers, model_params.MODEL_PARAMS, anomaly_file, select_cols=True)
 	detector.runAstroAnomaly()
 	
 	# Write original spectra to csv
@@ -380,7 +382,7 @@ if __name__ == "__main__":
 	
 	# Visualize original spectra with anomalies
 	output_filename = 'spectra.png'
-	viz = Viz(spectrum_file, 0, 6000)
+	viz = Viz(spectrum_file, TIME_MIN, TIME_MAX)
 	viz.choose_spectra(0, 30)
 	viz.add_anomalies(anomaly_file)
 	viz.plot(output_filename)
