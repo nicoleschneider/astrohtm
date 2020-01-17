@@ -99,14 +99,16 @@ class Viz(object):
 			The png file that will contain the image of the visualization when it is complete
 		"""
 		fig, axs = plt.subplots(self.num_cols, sharex=True, sharey=True)
+		anom = fig.add_subplot(self.num_cols, 1, 1, sharex=axs[0])
 		fig.suptitle('Spectra')
 
 		for i in range(self.num_cols):
 			xs = np.array(self.df['timestamp'])
 			ys = np.array(self.df[self.df.columns[1:]])[:,i]
 			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
-			if i == 0:  # if anomaly score
-				axs[i].plot(xs, ys, 'r')  # plot as red
+			if i == 0:  # if anomaly scores column
+				anom.plot(xs, ys, 'r')
+				#axs[i].plot(xs, ys, 'r')  # plot as red
 			else:
 				axs[i].plot(xs, ys, 'b')  # plot as blue
 		
@@ -125,7 +127,7 @@ if __name__ == "__main__":
 	anomaly_filename = 'spectrum4.csv'
 	
 	min_time = 0  # must be >= 0
-	max_time = 1500  # must be <= max time in dataset i.e. 6000 or less
+	max_time = 6000  # must be <= max time in dataset i.e. 6000 or less
 
 	min_spectra = 0  # must be >= 0
 	max_spectra = 30  # must be <= df size - 1 i.e. 30 or less
