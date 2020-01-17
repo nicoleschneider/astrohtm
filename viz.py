@@ -29,7 +29,7 @@ class Viz(object):
 			The upper bound on the timestamp value to include in the plot
 		"""
 		self.df = read_csv(input_filename)
-		self.num_spectra = len(self.df.columns) - 1
+		self.num_cols = len(self.df.columns) - 1
 		
 		self._MIN_TIMESTAMP = min_time
 		self._MAX_TIMESTAMP = max_time
@@ -44,11 +44,11 @@ class Viz(object):
 		@param fin (int)
 			The last (highest) spectra to include in the visualization
 		"""
-		droplist = [x for x in range(0, start)] + [y for y in range(fin, self.num_spectra)]
+		droplist = [x for x in range(0, start)] + [y for y in range(fin, self.num_cols)]
 		labels = ['b' + str(z) for z in droplist]
 		print "Dropping the following spectra:", labels
 		self.df = self.df.drop(labels, axis='columns')  # drop spectra from the dataframe
-		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
+		self.num_cols = len(self.df.columns) - 1  # update number of columns being used
 		
 		
 	def add_anomalies(self, anomaly_filename):
@@ -64,7 +64,7 @@ class Viz(object):
 
 		self.df = self.df.join(anomaly_df.set_index('timestamp'), on='timestamp',lsuffix='_caller', rsuffix='_temp')
 		print self.df
-		self.num_spectra = len(self.df.columns) - 1  # update number of spectra being used
+		self.num_cols = len(self.df.columns) - 1  # update number of columns being used
 
 	def trim_timestamp(self, xs, ys, min, max):
 		"""
@@ -94,10 +94,10 @@ class Viz(object):
 		@param output_filename (string)
 			The png file that will contain the image of the visualization when it is complete
 		"""
-		fig, axs = plt.subplots(self.num_spectra, sharex=True, sharey=True)
+		fig, axs = plt.subplots(self.num_cols, sharex=True, sharey=True)
 		fig.suptitle('Spectra')
 
-		for i in range(self.num_spectra):
+		for i in range(self.num_cols):
 			xs = np.array(self.df['timestamp'])
 			ys = np.array(self.df[self.df.columns[1::1]])[:,i]
 			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
@@ -117,7 +117,7 @@ if __name__ == "__main__":
 	output_filename = 'spectra.png'
 	anomaly_filename = 'spectrum4.csv'
 	
-	min_time =   # must be >= 0
+	min_time = 0  # must be >= 0
 	max_time = 1500  # must be <= max time in dataset i.e. 6000 or less
 
 	min_spectra = 0  # must be >= 0
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 	viz = Viz(input_filename, min_time, max_time)
 	viz.choose_spectra(min_spectra, max_spectra)
 	viz.add_anomalies(anomaly_filename)
-	print "size:", viz.num_spectra
+	print "size:", viz.num_cols
 		
 	viz.plot(output_filename)
 
