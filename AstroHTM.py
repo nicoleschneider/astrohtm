@@ -371,10 +371,10 @@ if __name__ == "__main__":
 	spectrum_file = 'nu80002092008A01_x2_bary_binned10.csv'
 	detector.data.write_data_to_csv(spectrum_file)
 	
-	# Visualize original spectra
+	# Visualize original spectra with anomalies
 	output_filename = 'spectra.png'
-	viz = Viz(spectrum_file, anomaly_file, 0, 3000, 0, 30)
+	viz = Viz(spectrum_file, 0, 6000)
+	viz.choose_spectra(0, 30)
+	viz.add_anomalies(anomaly_file)
 	viz.plot(output_filename)
 	print "Plot was saved to", output_filename
-	
-	
