@@ -99,6 +99,16 @@ class Data(object):
 		self.spectrum = self.table.field(2)
 		print(self.spectrum)
 		
+	
+	def set_input_stats(self):	
+		self._INPUT_MIN = [0]*30  # minimum metric value of the input data
+		self._INPUT_MAX = [0]*30  # maximum metric value of the input data
+		
+		for i in range(len(self.headers)-1):
+			self._INPUT_MAX[i] = np.max(self.spectrum[:,i])
+			self._INPUT_MIN[i] = np.min(self.spectrum[:,i])
+
+		
 		
 	def select_cols(self, min_variance, model_params):
 		"""
@@ -115,6 +125,8 @@ class Data(object):
 		#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(self.spectrum[:,i]) #/( np.std(self.dspectrum[:,i]) )
 			self.spectrum[:,i] = map(lambda x: max(x,0), self.spectrum[:,i])
 
+			print "Variance is:", np.var(self.spectrum[:,i])
+			
 			if np.var(self.spectrum[:,i]) < min_variance:
 				self.headers.remove(element)
 				model_params["modelParams"]["sensorParams"]["encoders"].pop(element)
@@ -206,12 +218,6 @@ class AstroHTM(object):
 	anomaly_count = 0
 	encoder_resolution_set = False
 
-	# minimum metric value of test_data.flc
-	_INPUT_MIN = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0 ,0 ,0 ,0]  # changed to min flux value
-
-	# maximum metric value of test_data.flc
-	_INPUT_MAX = [439, 140, 41, 17, 12, 9, 9, 8, 11, 9, 10, 7, 6, 6, 7, 5, 7, 5, 7, 6, 6, 5, 5, 6, 5, 6, 4, 5, 5, 5] # changed to max flux value
-	_INPUT_MAX = [300]*30
 
 	
 	def __init__(self, min_var, headers, model_params, output_path, select_cols=False, threshold = 0.5):
@@ -242,6 +248,7 @@ class AstroHTM(object):
 		#self.model = self.createModel()
 		self.model_params = copy.deepcopy(model_params)
 		self._OUTPUT_PATH = output_path
+		self.data.set_input_stats()
 
 	def get_anomaly_count(self):
 		return self.anomaly_count
@@ -257,12 +264,12 @@ class AstroHTM(object):
 			encoder = self.model_params["modelParams"]["sensorParams"]["encoders"][field]
 
 			if encoder["type"] == "RandomDistributedScalarEncoder" and "numBuckets" in encoder:
-				rangePadding = abs(self._INPUT_MAX[i] - self._INPUT_MIN[i]) * 0.2
-				minValue = self._INPUT_MIN[i] - rangePadding
-				maxValue = self._INPUT_MAX[i] + rangePadding
+				rangePadding = abs(self.data._INPUT_MAX[i] - self.data._INPUT_MIN[i]) * 0.2
+				minValue = self.data._INPUT_MIN[i] - rangePadding
+				maxValue = self.data._INPUT_MAX[i] + rangePadding
 				resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
 				encoder["resolution"] = resolution
-				#print("RESOLUTION________________", resolution)
+				print "RESOLUTION________________", resolution
 
 			self.model_params['modelParams']['sensorParams']['encoders'][field] = encoder
 			
@@ -364,7 +371,7 @@ if __name__ == "__main__":
 	
 	# Build and run anomaly detector 
 	anomaly_file = "spectrum4.csv"
-	detector = AstroHTM(250, headers, model_params.MODEL_PARAMS, anomaly_file)
+	detector = AstroHTM(0.001, headers, model_params.MODEL_PARAMS, anomaly_file, select_cols=True)
 	detector.runAstroAnomaly()
 	
 	# Write original spectra to csv
