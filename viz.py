@@ -106,6 +106,7 @@ class Viz(object):
 		anom = fig.add_subplot(self.num_cols, 1, 1, sharex=axs[0])
 		anom.get_xaxis().set_visible(False)
 		fig.suptitle(self.datafile)
+		fig.subplots_adjust(hspace=0)
 
 		for i in range(self.num_cols):
 			xs = np.array(self.df['timestamp'])
@@ -119,7 +120,8 @@ class Viz(object):
 		anom.legend([l1, l2], ['Anomaly Score', 'Photon Count'], bbox_to_anchor=(0., 1.02, 1., .102), loc='lower left',
            ncol=2, mode="expand", borderaxespad=0.)
 		
-
+		fig.text(0.5, 0.04, 'Timestamp', ha='center', va='center')
+		fig.text(0.06, 0.5, 'Photon Count', ha='center', va='center', rotation='vertical')
 
 		plt.xlabel('Timestamp')    
 		plt.show()
