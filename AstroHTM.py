@@ -305,7 +305,7 @@ class AstroHTM(object):
 		Create Output object and write header line to csv file
 		"""
 		self.output = Output(self._OUTPUT_PATH)
-		self.output.write(["timestamp", "b0", "scaled_score", "anomaly_score"])
+		self.output.write(["timestamp", str(self.data.headers[1]), "scaled_score", "anomaly_score"])
 
   
 	def generate_model_input(self, index):
@@ -347,7 +347,7 @@ class AstroHTM(object):
 		if anomalyScore > self._ANOMALY_THRESHOLD:
 			self.anomaly_count = self.anomaly_count + 1
 			self._LOGGER.info("Anomaly detected at [%s]. Anomaly score: %f.", self.modelInput["timestamp"], anomalyScore)
-		self.output.write([self.modelInput["float"], self.modelInput["b0"], scaledScore, "%.3f" % anomalyScore])
+		self.output.write([self.modelInput["float"], self.modelInput[self.data.headers[1]], scaledScore, "%.3f" % anomalyScore])
 	
 	
 	def runAstroAnomaly(self):
@@ -359,7 +359,7 @@ class AstroHTM(object):
 		self.setup_data()
   
 		self.model = self.createModel()
-		self.model.enableInference({'predictedField': 'b0'})  # doesn't matter for anomaly detection
+		self.model.enableInference({'predictedField': self.data.headers[1]})  # doesn't matter for anomaly detection
 	  
 		for i in tqdm.tqdm(range(0, self.data.data_size, 1), desc='% Complete'):
 			self.generate_model_input(i)
