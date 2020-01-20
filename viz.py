@@ -28,6 +28,7 @@ class Viz(object):
 		@param max_time (int)
 			The upper bound on the timestamp value to include in the plot
 		"""
+		self.datafile = input_filename
 		self.df = read_csv(input_filename)
 		self.num_cols = len(self.df.columns) - 1
 		
@@ -63,11 +64,9 @@ class Viz(object):
 		anomaly_df = anomaly_df.drop("scaled_score", axis='columns')
 
 		self.df = self.df.join(anomaly_df.set_index('timestamp'), on='timestamp',lsuffix='_caller', rsuffix='_temp')
-		print self.df
 		
 		first_cols = ['timestamp', 'anomaly_score']
 		self.df = self.df[[c for c in first_cols if c in self.df] + [c for c in self.df if c not in first_cols]]
-		print self.df
 		self.num_cols = len(self.df.columns) - 1  # update number of columns being used
 
 	def trim_timestamp(self, xs, ys, min, max):
@@ -99,22 +98,28 @@ class Viz(object):
 			The png file that will contain the image of the visualization when it is complete
 		"""
 		fig, axs = plt.subplots(self.num_cols, sharex=True, sharey=True)
+		
+		for ax in axs:
+			ax.label_outer()  # remove axis info on all but outer plots
+			ax.get_yaxis().set_visible(False)
+			
 		anom = fig.add_subplot(self.num_cols, 1, 1, sharex=axs[0])
-		fig.suptitle('Spectra')
+		anom.get_xaxis().set_visible(False)
+		fig.suptitle(self.datafile)
 
 		for i in range(self.num_cols):
 			xs = np.array(self.df['timestamp'])
 			ys = np.array(self.df[self.df.columns[1:]])[:,i]
 			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
 			if i == 0:  # if anomaly scores column
-				anom.plot(xs, ys, 'r')
-				#axs[i].plot(xs, ys, 'r')  # plot as red
+				l1, = anom.plot(xs, ys, 'r')
 			else:
-				axs[i].plot(xs, ys, 'b')  # plot as blue
+				l2, = axs[i].plot(xs, ys, 'b')  # plot as blue
+				
+		anom.legend([l1, l2], ['Anomaly Score', 'Photon Count'], bbox_to_anchor=(0., 1.02, 1., .102), loc='lower left',
+           ncol=2, mode="expand", borderaxespad=0.)
 		
-		for ax in axs:
-			ax.label_outer()  # remove axis info on all but outer plots
-			ax.get_yaxis().set_visible(False)
+
 
 		plt.xlabel('Timestamp')    
 		plt.show()
