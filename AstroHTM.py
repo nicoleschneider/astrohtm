@@ -90,13 +90,13 @@ class Data(object):
 		self.hdu_list = fits.open(source_file)
 		self.table = astropy.table.Table.read(self.hdu_list[1])
 		self.data_size = len(self.table)
-		print("LENGTH IS: ", self.data_size)
+		print "LENGTH IS:", self.data_size
 		
 		self.timestamps = self.table.field(0)
 		self.images = self.table.field(1) # we ignore for now
 		self.spectrum = self.table.field(2)
 		self.spectrum_size = len(self.headers)-1
-		print(self.spectrum)
+
 		
 	
 	def set_input_stats(self):	
@@ -110,6 +110,8 @@ class Data(object):
 		
 	def select_cols(self, min_variance, model_params):
 		"""
+		Eliminate all data columns that fail to meet 
+		the minimum variance requirement
 		Parameters:
 		------------
 		@param min_var (int)
@@ -128,13 +130,16 @@ class Data(object):
 			if np.var(self.spectrum[:,i]) < min_variance:
 				self.headers.remove(element)
 				model_params["modelParams"]["sensorParams"]["encoders"].pop(element)
-				print("___________ SELECT COL JUsT REMOVED___________", element)
+				print "SELECT COL JUST REMOVED", element
 			  
 		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
-		print("ENDED UP USING ", len(self.headers), " columns total")
+		print "ENDED UP USING", len(self.headers), "columns total"
 		
 		
 	def replace_bad_intervals(self):
+		"""
+		Pull power spectrum noise from csv file to fill in bad time intervals
+		"""
 		df = pd.read_csv("psd1.csv")
 		saved_column = df['final signal'].values
 		saved_column = np.append(saved_column, [0])
@@ -168,6 +173,7 @@ class Data(object):
 		
 	def write_data_to_csv(self, output_file, header_list=[]):
 		"""
+		Write the original spectral data to a csv file
 		Parameters:
 		------------
 		@param output_file (string)
@@ -184,7 +190,7 @@ class Data(object):
 		
 		csvWriter = csv.writer(open(output_file,"wb"))
 		csvWriter.writerow(header_list)
-		print(self.headers)
+		print "Headers to be written are:", self.headers
 		
 		for i in tqdm.tqdm(range(0, self.data_size, 1), desc='% Complete'):
 			record = self.generate_record(i, header_list)
@@ -195,7 +201,7 @@ class Data(object):
 				
 			csvWriter.writerow([modelInput[x] for x in header_list])
 
-		print("Original data has been written to",output_file)
+		print "Original data has been written to", output_file
 		
 		
 
@@ -206,8 +212,8 @@ class AstroHTM(object):
 	"""
 	_LOGGER = logging.getLogger(__name__)
 	
-	##_SOURCE_FILE = './srcB_3to40_cl_barycorr_binned_multiD.fits'
-	_SOURCE_FILE = 'nu80002092008A01_x2_bary_binned10.fits'
+	#_SOURCE_FILE = './srcB_3to40_cl_barycorr_binned_multiD.fits'
+	#_SOURCE_FILE = 'nu80002092008A01_x2_bary_binned10.fits'
 	#_SOURCE_FILE = 'ni1103010157_0mpu7_cl_binned10.fits'
 	
 	_ANOMALY_SCALE_FACTOR = 300
@@ -216,7 +222,7 @@ class AstroHTM(object):
 
 
 	
-	def __init__(self, min_var, headers, model_params, output_path, select_cols=False, threshold = 0.5):
+	def __init__(self, source_file, min_var, headers, model_params, output_path, select_cols=False, threshold = 0.5):
 		"""
 		Parameters:
 		------------
@@ -235,11 +241,12 @@ class AstroHTM(object):
 		@param threshold (float from 0 to 1)
 			Determines how high an anomaly score must be in order to register as an anomaly
 		"""
+		self._SOURCE_FILE = source_file
 		self._MIN_VARIANCE = min_var		
 		self._SELECT_COLS = select_cols
 		self._ANOMALY_THRESHOLD = threshold
 		self.data = Data(self._SOURCE_FILE, headers)
-		print(len(headers), " headers given originally")
+		print len(headers), "headers given originally"
 		#self.model = self.createModel()
 		self.model_params = copy.deepcopy(model_params)
 		self._OUTPUT_PATH = output_path
@@ -264,7 +271,7 @@ class AstroHTM(object):
 				maxValue = self.data._INPUT_MAX[i] + rangePadding
 				resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
 				encoder["resolution"] = resolution
-				print "RESOLUTION________________", resolution
+				print "RESOLUTION:", resolution
 
 			self.model_params['modelParams']['sensorParams']['encoders'][field] = encoder
 			
@@ -273,7 +280,7 @@ class AstroHTM(object):
 		for i in self.model_params['modelParams']['sensorParams']['encoders'].keys():
 			if i not in self.data.headers:
 				self.model_params['modelParams']['sensorParams']['encoders'].pop(i)
-				print(i, " was removed in reolution")
+				print i, "was removed in reolution"
 
 
 	def createModel(self):
@@ -285,7 +292,6 @@ class AstroHTM(object):
 		#print("SPECTRUM BEFORE PROCESSING: ", self.data.spectrum)
 		
 		if self._SELECT_COLS:
-			print("SELECTING COLS FROM HERE ____ _______ ______________________________")
 			self.data.select_cols(self._MIN_VARIANCE, self.model_params)
 			self._SELECT_COLS = False
 			
@@ -295,12 +301,16 @@ class AstroHTM(object):
 
   
 	def setup_output(self):
+		"""
+		Create Output object and write header line to csv file
+		"""
 		self.output = Output(self._OUTPUT_PATH)
 		self.output.write(["timestamp", "b0", "scaled_score", "anomaly_score"])
 
   
 	def generate_model_input(self, index):
 		"""
+		Generate the index-th input point for the model to analyze 
 		Parameters:
 		------------
 		@param index (int)
@@ -325,6 +335,7 @@ class AstroHTM(object):
 	
 	def output_results(self, anomalyScore, scaledScore):
 		"""
+		Output one line of results corresponding to one datapoint's analysis by the model
 		Parameters:
 		------------
 		@param anomalyScore (float)
@@ -340,7 +351,10 @@ class AstroHTM(object):
 	
 	
 	def runAstroAnomaly(self):
-		print("Running with min var of: ", self._MIN_VARIANCE)
+		"""
+		Process data, setup Output, and build and run anomaly detection model
+		"""
+		print "...Running with min var of: ", self._MIN_VARIANCE
 		self.setup_output()
 		self.setup_data()
   
@@ -352,7 +366,7 @@ class AstroHTM(object):
 			anomalyScore, scaledScore = self.run_model()
 			self.output_results(anomalyScore, scaledScore)
     
-		print("Anomaly Scores have been written to", self._OUTPUT_PATH)
+		print "Anomaly Scores have been written to", self._OUTPUT_PATH
 		self.output.close()
 				
 
@@ -369,15 +383,16 @@ if __name__ == "__main__":
 	VARIANCE_CUTOFF = float(args[0])
 	TIME_MIN        = int(args[1])
 	TIME_MAX        = int(args[2])
+	SOURCE_FILE     = args[3]
 	
 	
 	# Build and run anomaly detector 
 	anomaly_file = "spectrum4.csv"
-	detector = AstroHTM(VARIANCE_CUTOFF, headers, model_params.MODEL_PARAMS, anomaly_file, select_cols=True)
+	detector = AstroHTM(SOURCE_FILE + '.fits', VARIANCE_CUTOFF, headers, model_params.MODEL_PARAMS, anomaly_file, select_cols=True)
 	detector.runAstroAnomaly()
 	
 	# Write original spectra to csv
-	spectrum_file = 'nu80002092008A01_x2_bary_binned10.csv'
+	spectrum_file = SOURCE_FILE + '.csv'
 	detector.data.write_data_to_csv(spectrum_file)
 	
 	# Visualize original spectra with anomalies
