@@ -101,7 +101,6 @@ class Viz(object):
 		
 		for ax in axs:
 			ax.label_outer()  # remove axis info on all but outer plots
-			ax.get_yaxis().set_visible(False)
 			
 		anom = fig.add_subplot(self.num_cols, 1, 1, sharex=axs[0])
 		anom.get_xaxis().set_visible(False)
@@ -109,13 +108,18 @@ class Viz(object):
 		fig.subplots_adjust(hspace=0)
 
 		for i in range(self.num_cols):
-			xs = np.array(self.df['timestamp'])
+			xs = np.array(self.df['timestamp'])			
 			ys = np.array(self.df[self.df.columns[1:]])[:,i]
 			xs, ys = self.trim_timestamp(xs, ys, self._MIN_TIMESTAMP, self._MAX_TIMESTAMP)
+		
 			if i == 0:  # if anomaly scores column
 				l1, = anom.plot(xs, ys, 'r')
+				anom.yaxis.set_label_position("right")
 			else:
 				l2, = axs[i].plot(xs, ys, 'b')  # plot as blue
+				axs[i].set_yticklabels([])
+				axs[i].yaxis.set_label_position("right")
+				axs[i].set_ylabel(self.df.columns[i+1], labelpad=15, rotation=0)
 				
 		anom.legend([l1, l2], ['Anomaly Score', 'Photon Count'], bbox_to_anchor=(0., 1.02, 1., .102), loc='lower left',
            ncol=2, mode="expand", borderaxespad=0.)
@@ -123,7 +127,6 @@ class Viz(object):
 		fig.text(0.5, 0.04, 'Timestamp', ha='center', va='center')
 		fig.text(0.06, 0.5, 'Photon Count', ha='center', va='center', rotation='vertical')
 
-		plt.xlabel('Timestamp')    
 		plt.show()
 		plt.savefig(output_filename)
 
