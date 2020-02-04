@@ -65,6 +65,8 @@ class Bin(object):
 			   				   
 			if self.CONST:
 				self.make_bin_edges(t, t0, t1)
+			else:
+				self.bin_edges = ['na']
 
 			list_of_rows = []
 			energy = t['PI']*0.04 + 1.6  # valid for NuSTAR only
@@ -86,7 +88,7 @@ class Bin(object):
 					spec, _ = np.histogram(t['PI'][good], 
 						range=[self.lower_bound, self.upper_bound], bins=self.channels)
 					
-				res = {'Time': nt, 'data': img, 'spec': spec}
+				res = {'Time': nt, 'data': img, 'spec': spec, 'cutoffs':self.bin_edges}
 				list_of_rows.append(res)
 			
 			result_table = Table(list_of_rows)
@@ -100,7 +102,7 @@ class Bin(object):
 			else:
 				result_table.write(
 					event_file.replace('.gz', '').replace('.evt', '') 
-					+ '_binned' + str(self.bin_time) + 'FIXED_ENERGY.fits', overwrite=True
+					+ '_binned' + str(self.bin_time) + '.fits', overwrite=True
 				)
 		
 
