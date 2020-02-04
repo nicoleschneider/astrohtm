@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pandas import DataFrame, read_csv
 import numpy as np
+import sys
 
 class Viz(object):
 	"""
@@ -14,7 +15,7 @@ class Viz(object):
 	specified from _MIN_SPECTRA to _MAX_SPECTRA.
 	"""
 	
-	def __init__(self, input_filename, min_time, max_time):
+	def __init__(self, input_filename, min_time, max_time, cutoffs=[]):
 		"""
 		Parameters:
 		------------
@@ -34,6 +35,7 @@ class Viz(object):
 		
 		self._MIN_TIMESTAMP = min_time
 		self._MAX_TIMESTAMP = max_time
+		self.cutoffs = cutoffs
 
 	def choose_spectra(self, start, fin):
 		"""
@@ -104,6 +106,7 @@ class Viz(object):
 			
 		anom = fig.add_subplot(self.num_cols, 1, 1, sharex=axs[0])
 		anom.get_xaxis().set_visible(False)
+		
 		fig.suptitle(self.datafile)
 		fig.subplots_adjust(hspace=0)
 
@@ -129,10 +132,76 @@ class Viz(object):
 
 		plt.show()
 		plt.savefig(output_filename)
+		print "Plot was saved to", output_filename
+		
+		
+	def make_spectrum(self, output_filename, row_num):
+		"""
+		Parameters:
+		------------
+		@param output_filename (string)
+			The png file that will contain the image of the visualization when it is complete
+			
+		@param row_num (int)
+			Row number ocrresponding to the occurrence of the anomaly that the spectrum will be made for
+		"""
+		
+		buffer = 2  # how many spectra on either side of the anomaly point you want
+		
+		fig, axs = plt.subplots(2*buffer + 2)  # num plots on either side, plus center, plus anomaly score plot
+		
+		# plot anomalies
+		xs = np.array(self.df['timestamp']).astype(int)
+		ys = np.array(self.df[self.df.columns[1:]])[:,0]
+		xs, ys = self.trim_timestamp(xs, ys, row_num-buffer, row_num+buffer+1)  # trim to one before one after row_num
 
+		l1, = axs[0].plot(xs, ys, 'r')
+		axs[0].yaxis.set_label_position("right")
+		axs[0].set_xlabel("Timestamp (seconds)", labelpad=0, size='small')
+		axs[0].set_xticks(xs)
+		axs[0].tick_params(axis='x', which='major', labelsize=8)
+		axs[0].set_ylim([0, 1.1])
+		
+		
+		# plot spectra
+		for i, row in enumerate(range(row_num-buffer, row_num+buffer+1)):
+			data = self.df.iloc[row, 2:]  # the 2: gets rid of timestamp and anomaly score
+			labels = data.axes[0]
+			labels = [x[1:] for x in labels]  # strip the 'b' off labels
+			
+			axs[i+1].bar(labels, data)  # +1 to leave first subplot for anomaly scores
+			axs[i+1].tick_params(axis='x', which='major', labelsize=8)
+			axs[i+1].set_ylabel("T = "+str(xs[i]), labelpad=25, rotation=0)
+			axs[i+1].yaxis.set_label_position("right")
+
+		
+		# edit overall figure
+		fig.suptitle(self.datafile)
+		fig.subplots_adjust(hspace=0.5)
+		fig.text(0.5, 0.04, 'Channel', ha='center', va='center')
+		fig.text(0.06, 0.38, 'Spectra', ha='center', va='center', rotation='vertical')
+		fig.text(0.06, 0.8, 'Anomaly Score', ha='center', va='center', rotation='vertical')
+		
+		plt.show()
+		plt.savefig(output_filename)
+		print "Plot was saved to", output_filename
+		
+	def generate_spectra(self, threshold, start_time, stop_time):
+		for i, score in enumerate(self.df['anomaly_score']):
+			# if anomaly and occurs not at start or endpoint of data and is within desired time bounds:
+			if (score > threshold) & (i < len(self.df)-1) & (i > 3) & (i > start_time) & (i < stop_time):
+				print i
+				self.make_spectrum('hist.png', i)
+				
+				
 	
 if __name__ == "__main__":
-	input_filename = 'nu80002092008A01_x2_bary_binned10.csv'
+
+	start_time = int(sys.argv[1])
+	stop_time = int(sys.argv[2])
+	input_filename = sys.argv[3]
+	
+	#input_filename = 'nu80002092008A01_x2_bary_binned10.csv' "ni1103010157_0mpu7_cl_binned10.csv"
 	output_filename = 'spectra.png'
 	anomaly_filename = 'spectrum4.csv'
 	
@@ -147,6 +216,6 @@ if __name__ == "__main__":
 	viz.add_anomalies(anomaly_filename)
 	print "size:", viz.num_cols
 		
-	viz.plot(output_filename)
-
-	print "Plot was saved to", output_filename
+	#viz.plot(output_filename)
+	viz. make_spectrum('hist.png', 2125)
+	viz.generate_spectra(0.5, start_time, stop_time)
