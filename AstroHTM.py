@@ -88,14 +88,17 @@ class Data(object):
 		self.headers = headers
 	
 		self.hdu_list = fits.open(source_file)
+		print self.hdu_list.info()
+		
 		self.table = astropy.table.Table.read(self.hdu_list[1])
 		self.data_size = len(self.table)
 		print "LENGTH IS:", self.data_size
 		
-		self.timestamps = self.table.field(0)
-		self.images = self.table.field(1) # we ignore for now
-		self.spectrum = self.table.field(2)
+		self.timestamps = self.table.field('Time')
+		self.images = self.table.field('data') # we ignore for now
+		self.spectrum = self.table.field('spec')
 		self.spectrum_size = len(self.headers)-1
+		self.cutoffs = self.table.field('cutoffs')
 
 		
 	
@@ -134,6 +137,10 @@ class Data(object):
 			  
 		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
 		print "ENDED UP USING", len(self.headers), "columns total"
+		
+		if len(self.headers) <= 1:
+			print "NO CHANNELS WERE KEPT, ABORTING TEST"
+			exit(0)
 		
 		
 	def replace_bad_intervals(self):
@@ -226,6 +233,10 @@ class AstroHTM(object):
 		"""
 		Parameters:
 		------------
+		@param source_file
+			The fits file name containing the data to run anomaly detection on.
+			Do not include '.fits' at the end of the filename, it is implied.
+			
 		@param min_var (int)
 			The minimum variance a spectrum column will have else it is dropped
 		
@@ -237,9 +248,11 @@ class AstroHTM(object):
 			
 		@param select_cols (boolean)
 			True if columns should be removed for having low variance, false otherwise
+			Default value is False
 			
 		@param threshold (float from 0 to 1)
 			Determines how high an anomaly score must be in order to register as an anomaly
+			Default value is 0.5
 		"""
 		self._SOURCE_FILE = source_file
 		self._MIN_VARIANCE = min_var		
@@ -280,7 +293,6 @@ class AstroHTM(object):
 		for i in self.model_params['modelParams']['sensorParams']['encoders'].keys():
 			if i not in self.data.headers:
 				self.model_params['modelParams']['sensorParams']['encoders'].pop(i)
-				print i, "was removed in reolution"
 
 
 	def createModel(self):
@@ -367,6 +379,7 @@ class AstroHTM(object):
 			self.output_results(anomalyScore, scaledScore)
     
 		print "Anomaly Scores have been written to", self._OUTPUT_PATH
+		print self.data.headers
 		self.output.close()
 				
 
@@ -384,6 +397,7 @@ if __name__ == "__main__":
 	TIME_MIN        = int(args[1])
 	TIME_MAX        = int(args[2])
 	SOURCE_FILE     = args[3]
+	PLOT_FILE       = args[4]
 	
 	
 	# Build and run anomaly detector 
@@ -396,9 +410,9 @@ if __name__ == "__main__":
 	detector.data.write_data_to_csv(spectrum_file)
 	
 	# Visualize original spectra with anomalies
-	output_filename = 'spectra.png'
-	viz = Viz(spectrum_file, TIME_MIN, TIME_MAX)
+	viz = Viz(spectrum_file, TIME_MIN, TIME_MAX, cutoffs=detector.data.cutoffs)
 	viz.choose_spectra(0, 30)
 	viz.add_anomalies(anomaly_file)
-	viz.plot(output_filename)
-	print "Plot was saved to", output_filename
+	print viz.df
+	viz.plot(PLOT_FILE)
+	print "Plot was saved to", PLOT_FILE
