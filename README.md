@@ -8,6 +8,15 @@ Algorithm(s):
 Data Source(s):
 * Light Curve of pulsar
 
+Package Requirements:
+* nupic 1.0.5
+* numpy 1.16.5
+* pandas 0.23.0
+* matplotlib 2.2.4
+* astropy 2.0.12
+* optuna 0.19.0
+* tqdm 4.40.2
+
 Usage:
 * Run bin.py on the .evt file containing the data to aggregate data
   * python bin.py  \<Lower bound of Energy> \<Upper bound of Energy> \<Number of seconds to agregate data by> \<Number of channels to make in the histogram> \<data file>.evt
