@@ -1,4 +1,3 @@
-import sys
 import tqdm
 import argparse
 
@@ -36,33 +35,12 @@ class Args(object):
 
 
 		
-	def store_const(self):
-		self.constant = 999
-		
-		
-		# self.lower_bound = float(argv[1])
-		# self.upper_bound = float(argv[2])
-		# self.bin_time = int(argv[3])
-		# self.channels = int(argv[4])
-		# self.CONST = True if argv[5] == 'CONST' else False
-		# print self.CONST
-		# self.event_files = argv[6:]
-		
 			
 class Bin(object):
 
 	def __init__(self):
 		"""
-		Parameters:
-		------------
-		@param argv (list of strings)
-			Command line arguments for:
-				Lower energy bound
-				Upper energy bound
-				Number of seconds to aggregate by (10 sec)
-				Number of bins to use in spectrum (30 bins)
-				'CONST' for constant binning, otherwise any other string for normal binning
-				Event filenames
+		Create bin object
 		"""
 		
 	def do_binning(self, args):  # ORGINIAL NON CONSTANT BINNING
@@ -191,4 +169,4 @@ if __name__ == '__main__':
 	
 	bin = Bin()
 	ARGS.binning_function(bin, ARGS)
-	
+
