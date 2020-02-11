@@ -38,35 +38,18 @@ from pkg_resources import resource_filename
 from nupic.frameworks.opf.model_factory import ModelFactory
 from nupic.data.inference_shifter import InferenceShifter
 from nupic.algorithms import anomaly_likelihood as AL
-from viz import Viz
 
+from viz import Viz
+from output import Output
 import model_params
+
+
 import astropy
 from astropy.io import fits
 from astropy.io import ascii
 
 
-class Output(object):
-	"""
-	This class handles the output of data and results to csv file
-	format for future visualization.
-	"""
 
-	def __init__(self, output_path):
-		"""
-		Parameters:
-		------------
-		@param output_path (string)
-			The filename to whioh the output will be written
-		"""
-		self.fid = open(output_path, "wb")
-		self.csvWriter = csv.writer(self.fid)
-		
-	def write(self, entry_array):
-		self.csvWriter.writerow(entry_array)
-		
-	def close(self):
-		self.fid.close()
 
 class Data(object):
 	"""
@@ -127,13 +110,11 @@ class Data(object):
 			self.spectrum[:,i] =  self.spectrum[:,i] - np.mean(self.spectrum[:,i]) #/( np.std(self.spectrum[:,i]) )
 		#  _INPUT_MAX[i] =  _INPUT_MAX[i] - np.mean(self.spectrum[:,i]) #/( np.std(self.dspectrum[:,i]) )
 			self.spectrum[:,i] = map(lambda x: max(x,0), self.spectrum[:,i])
-
-			print "Variance is:", np.var(self.spectrum[:,i])
 			
 			if np.var(self.spectrum[:,i]) < min_variance:
 				self.headers.remove(element)
 				model_params["modelParams"]["sensorParams"]["encoders"].pop(element)
-				print "SELECT COL JUST REMOVED", element
+				print "SELECT COL JUST REMOVED", element, "with variance", np.var(self.spectrum[:,i])
 			  
 		 # _INPUT_MAX = map(lambda x: max(x,0), _INPUT_MAX)	  
 		print "ENDED UP USING", len(self.headers), "columns total"
@@ -284,7 +265,7 @@ class AstroHTM(object):
 				maxValue = self.data._INPUT_MAX[i] + rangePadding
 				resolution = max(minResolution, (maxValue - minValue) / encoder.pop("numBuckets") )
 				encoder["resolution"] = resolution
-				print "RESOLUTION:", resolution
+				#print "RESOLUTION:", resolution
 
 			self.model_params['modelParams']['sensorParams']['encoders'][field] = encoder
 			
@@ -389,7 +370,7 @@ if __name__ == "__main__":
 
 	headers = ['timestamp', 'b0', 'b1', 'b2', 'b3','b4','b5', 'b6', 'b7', 'b8', 'b9', 'b10', 'b11', 'b12', 'b13', 
 				'b14', 'b15', 'b16', 'b17', 'b18', 'b19', 'b20', 'b21', 'b22', 'b23', 'b24', 'b25', 'b26', 'b27', 
-				'b28', 'b29']
+				'b28', 'b29','b30', 'b31', 'b32', 'b33', 'b34', 'b35', 'b36', 'b37', 'b38', 'b39' ]
 	
 	# Parse command line arguments
 	args = sys.argv[1:]
@@ -398,6 +379,7 @@ if __name__ == "__main__":
 	TIME_MAX        = int(args[2])
 	SOURCE_FILE     = args[3]
 	PLOT_FILE       = args[4]
+	NUM_CHANNELS    = int(args[5])
 	
 	
 	# Build and run anomaly detector 
@@ -411,8 +393,8 @@ if __name__ == "__main__":
 	
 	# Visualize original spectra with anomalies
 	viz = Viz(spectrum_file, TIME_MIN, TIME_MAX, cutoffs=detector.data.cutoffs)
-	viz.choose_spectra(0, 30)
+	viz.choose_spectra(0, NUM_CHANNELS)
 	viz.add_anomalies(anomaly_file)
-	print viz.df
+	#print viz.df
 	viz.plot(PLOT_FILE)
 	print "Plot was saved to", PLOT_FILE
